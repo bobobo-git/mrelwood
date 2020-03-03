@@ -1,0 +1,3675 @@
+desc: MotherComp  1.18  [mrelwood]
+
+
+// (Copyright) 2018 - mrelwood plugins
+//
+//  This program is a free software plugin: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This plugin is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//  <https://www.gnu.org/licenses/>.
+
+
+
+// Includes code by Stillwell:
+
+// Copyright 2006, Thomas Scott Stillwell
+// All rights reserved.
+//
+//Redistribution and use in source and binary forms, with or without modification, are permitted 
+//provided that the following conditions are met:
+//
+//Redistributions of source code must retain the above copyright notice, this list of conditions 
+//and the following disclaimer. 
+//
+//Redistributions in binary form must reproduce the above copyright notice, this list of conditions 
+//and the following disclaimer in the documentation and/or other materials provided with the distribution. 
+//
+//The name of Thomas Scott Stillwell may not be used to endorse or 
+//promote products derived from this software without specific prior written permission. 
+//
+//THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR 
+//IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND 
+//FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS 
+//BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES 
+//(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR 
+//PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, 
+//STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF 
+//THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+
+slider1:0<0,1,0.01>-Amount
+slider2:0.2<0,1,0.01>-Preset
+
+slider3:0<-30,30,0.1>-Output Volume
+slider5:4<1,12,0.1>-Ratio
+slider6:0<0,30,1>-Level Detector RMS Window
+slider7:1<1,50,0.1>-Current Compression Ratio
+
+slider9:10<0.0,50,0.1>-Attack
+slider10:70<1,300,1>-Release
+
+slider14:1<0,1,1{L/R,M/S}>-Stereo mode
+slider15:70<0,100,0.01>-Link M/S
+slider16:0<0,1,1{Off,On}>-Autogain
+slider17:-12<-60,0,0.1>-Threshold (dB)
+slider18:100<0.1,100,0.01>-Bias
+
+slider19:0<0,1,1>-Character
+slider20:0.1<0,1,0.01>-Attack knb
+slider21:0.3<0,1,0.01>-Release knb
+slider22:0.5<0,1,0.01>-Ratio knb
+slider23:0.5<0,1,0.01>-Tight knb
+slider25:0<0,2,1{Preset,Offset,Update}>-Offset
+slider26:0<0,1,1{-,Reset}>-Reset
+slider27:0<0,1,1{-,Reset2}>-Reset2
+slider28:0<0,1,1{Output,Relative}>-Vol mode
+slider29:1<0,1,1{Tonality,Instruments}>-Style List
+slider35:0<0,1,0.01>-Show Edit Buttons
+//slider39:1<0,2,1{-,Medium,Strong}>-Attack Defence
+slider39:0.6<0,1,0.01>-Attack Defence
+
+slider40:0<0,50,0.01>-Offset Attack
+slider41:0<0,500,0.1>-Offset Release
+slider42:0<0,12,0.01>-Offset Ratio
+slider43:0<0,100,0.01>-Offset Bias (= -Density)
+
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+options:no_meter
+
+
+@init
+version = "1.18";
+
+upinit = 1;
+upgfxinit = 1;
+
+
+    function f(precision vari)(
+        floor( (1/precision) * vari) / (1/precision);
+        );
+
+    gfx_ext_retina = 1;
+    rate = f(.001, 48000/srate );
+    
+    log2db = 8.6858896380650365530225783783321; // 20 / ln(10)
+    db2log = 0.11512925464970228420089957273422; // ln(10) / 20 
+
+/*
+    attime=attime2=0.0002; //0.2ms
+    reltime=reltime2=0.100; //100ms
+    rmstime=rmstime2=0.0005; //0.5ms
+    maxover=maxover2=0;
+    ratio=ratio2=0;
+    cratio=cratio2=0;
+    rundb=rundb2=0;
+    overdb=overdb2=0;
+    maxover=maxover2=0;
+    
+    atcoef=exp(-1/(attime * srate));
+    relcoef=exp(-1/(reltime * srate));
+    relcoef2=exp(-1/(reltime2 * srate));
+    rmscoef=exp(-1/(rmstime * srate));
+*/
+    mtrgr1 = mtrgr1pk = mtrgr2 = mtrgr2pk = 1;
+    
+    
+
+
+    meter_grv1_pk = meter_grv1_run = mtrgr1 = mtrgr1pk = 1;
+    meter_grv2_pk = meter_grv2_run = mtrgr2 = mtrgr2pk = 1;
+
+    upcomp = 2;
+    upall = 1;
+    gfxinitok = 0;
+    
+    
+    showdef = showdefa = 1;
+    
+    
+
+    ext_noinit = 1;
+    edge = 4;
+    
+
+    
+
+function multi(var_ cutbot cuttop expbot exptop mid)(
+    m1 =  min(1, max(0, var_-cutbot)/(mid-cutbot) )^expbot;
+    m2 = (1- min(1, max(0,var_-mid)/(cuttop-mid)) )^exptop;
+    mid >= 1 ? m2 = 1;
+    m = floor(m1 * m2 *1000)/1000;
+    );
+
+function col(type)(
+//    type == 0 ? gfx_set(0.65,0.6,0.5, 0.5 , 0);  // Very warm labels (meter lines)
+    type == 0 ? gfx_set(0.85,0.77,0.7, 0.7 , 0);  // = 31
+    type == 1 ? gfx_set(0.8,0.7,0.6, 0.8 , 0);  // Title label
+    type == 31 ? gfx_set(0.8,0.75,0.7, 0.85 , 0);  // Warm labels (Lists)
+    type == 2 ? gfx_set(0.35,0.5,0.6, 1 , 0); // Standard text ("Compress")
+    type == 32 ? gfx_set(0.75,0.7,0.7, 1 , 0); // Non-additive button text ("Character/Precise")
+    
+    type == 3 ? gfx_set(0.95,0.95,0.95, 1 , 0);    // Active button text
+    type == 4 ? gfx_set(0.7,0.7,0.7, 1 , 0); // Numbers
+    type == 5 ? gfx_set(0.65,0.55,0.5, 1 , 0); // "In GR Out" text
+
+    type == 6 ? gfx_set(0.3,0.2,0.15, 1 , 0); // Meter side color
+    type == 7 ? gfx_set(0.25,0.15,0.12, 1 , 0); // Meter side color
+    type == 8 ? gfx_set(0.7,0.6,0.55, 1 , 0); // Meter mid color
+
+
+    type == 10 ? gfx_set(1,1,1,1,0); // Reset
+    type == 20 ? gfx_set(1,1,1,1,1); // Reset, additive
+    
+    type == 11 ? gfx_set(0.95,0.95,0.95, 0.9 , 0); // Knob white
+    type == 12 ? gfx_set(0.2,0.2,0.2, 0.5 , 0); // Knob stripes
+    type == 13 ? (
+        grey = 0.19;
+        gfx_set(grey,grey,grey, 1 , 0);  // Slider track
+        );
+    type == 23 ? (
+        grey = 0.06;
+        gfx_set(grey,grey,grey, 1 , 0);  // Darker Slider track
+        );
+//    type == 14 ? gfx_set(0.0,0.0,0.0, 0.65 , 1); // Meter boxes
+    type == 14 ? gfx_set(0.0,0.0,0.0, 0.3 , 0); // Meter boxes
+    type == 15 ? gfx_set(0,0,0, 0.1 , 0); // Number boxes
+    type == 25 ? gfx_set(0,0,0, 0.55 , 0); // Number boxes alt
+    type == 16 ? gfx_set(1,1,1, 0.15 , 1); // clicked box
+    
+    type == 17 ? gfx_set(0.15,0.05,0.0, 0.8 , 0); // Edit box
+    
+    type== 96 ? gfx_set(0.17,0.03,0.0,1,0);  // Eco mode meter box background
+    type== 97 ? gfx_set(0.4,0.32,0.28,1,0);  // Eco mode buttons
+    type== 98 ? gfx_set(0.5,0.47,0.45,1 ,0);  // Eco mode knob edges
+    type== 99 ? gfx_set(0.6,0.57,0.55,1 ,0);  // Eco mode knobs 
+
+    
+    );  
+
+
+
+@serialize
+
+store_01 = file_var(0, offatt);
+store_02 = file_var(0, offrel);
+store_03 = file_var(0, offrat);
+store_04 = file_var(0, offden);
+
+ 
+@slider
+
+upcomp == 0 ? upcomp = 1; 
+
+//up20 = 1;
+up30 = 1;
+upgr = 1;
+upslider = 2;
+upnumber = 2;
+upedit = 1;
+upleft = 1;
+leftbreak = 10; 
+showingedit = 1;
+showdef = showdefa = 1;
+//showedita = slider35;
+
+//offatt =
+character = slider19;
+styles = slider29;
+offset = slider25;
+offset > 0 ? showedita = 1;
+// relative slider28
+    
+upcomp == 0 ? upcomp = 1;
+
+    
+@block
+//slider29 = styles = stylesforce;
+@sample
+//r = gfx_ext_retina;
+
+
+// PSEUDO BLOCK !!!!!!!!!!!!!!!!!!!!!!!!!!!
+blocktimer += 1;
+pseudoblocksize = max(500, samplesblock);
+(blocktimer >= pseudoblocksize) && (pseudoblock == 0) ? (pseudoblock += 1);
+upinit > 0 ? (
+  pseudoblock = upcomp = 1;
+  upinit -= 1;
+  );
+
+(pseudoblock > 0) || (upcomp > 0) ? (
+    pseudoblock -= 1;
+    blocktimer = 0;
+
+
+
+
+
+
+    
+    play_state != play_stateold ? upcomp = 1;
+    play_stateold = play_state ;
+    
+    (upall > 0) && (upcomp == 0) ? upcomp = upall;
+
+//    r = gfx_ext_retina;
+
+    midside = slider14;
+//midside = 0;  // tmp
+    link = slider15/100;
+    volmode = slider28;
+    pkbrake = slider39;
+    character = slider19;
+
+/*
+    styles != slider29 ? (
+      styles = stylesforce;
+      );
+*/
+//    styles = slider29;
+
+
+/*    
+    (showedita > 0) && (showedita < 1) ? (
+        upcomp += 1;
+        upedit += 1;
+        );
+    reset > 0 ? upcomp += 1;
+*/
+
+//drag > 0 ? upcomp = 1; // tmp
+
+
+
+    up20 > 0 ? upcomp += 1;
+    
+    upcomp > 0 ? (
+        (unsave == 0) ? upcomp -= 1;
+        
+/*
+        slider9 = floor(slider9*100)/100;
+        slider10 = floor(slider10);
+        slider6 = floor(slider6*10)/10;
+        slider18 = floor(slider18*10)/10;
+        slider17 = floor(slider17*10)/10;
+        slider5 = floor(slider5*10)/10;
+*/
+
+//        slider25 == 1 ? (
+//            offset = 1;
+p=0;
+//            );
+
+
+        reset == 1 ? (
+            offatt = offrel = offrat = offden = slider40 = slider41 = slider42 = slider43 = offset = 0;
+//            resetxta = 0.6;
+            slider25 = slider26 = slider27 = 0;
+
+            slider9 = progatt;
+            slider10 = progrel;
+            slider5 = prograt;
+            slider18 = progden;
+
+            upslider = 1;
+            upnumber = 1;
+            );
+
+// Store offset
+        character == 1 ? (
+//            slider25 > slider25old ? store = 1;
+//            slider25old = slider25;
+            
+            store == 1 ? (
+                offset = 1;
+                offatt = slider40 = slider9-progatt;
+                offrel = slider41 = slider10-progrel;
+                offrat = slider42 = slider5-prograt;
+                offden = slider43 = slider18-progden;
+                store = 0;
+                );
+
+            (reset == 0) && (up20 == 0) ? (
+
+floorsli == 1 ? (
+                slider9 = f(.01, slider20^2 * 50 );
+                slider10 = f(1, slider21^2 * 495 +5 );
+                slider5 = f(.1, slider22 * 11 +1);
+                slider18 = f(.1, (1-slider23^0.25) * 99.9 + 0.1);
+//                            slider6 = (1-slider23)^4 *30;
+):(
+                slider9 =  slider20^2 * 50 ;
+                slider10 =  slider21^2 * 495 +5 ;
+                slider5 =  slider22 * 11 +1;
+                slider18 =  (1-slider23^0.25) * 99.9 + 0.1;
+);
+
+
+                );
+
+
+            );
+
+
+
+        atvv = min(1,slider9/50);
+        revv = min(1,(slider10-5)/495);
+        ravv = min(1,(slider5-1)/20) /0.55;
+        thvv = min(1,(-slider17)/39);
+        rmvv = min(1,slider6/30);
+        devv = min(1, 1 - (slider18-0.1)/99.9)^4;
+        chvv = slider2;
+        covv = slider1;
+
+
+        atvv = floor(1000* atvv)/1000;
+        revv = floor(1000* revv)/1000;
+        ravv = floor(1000* ravv)/1000;
+        thvv = floor(1000* thvv)/1000;
+        rmvv = floor(1000* rmvv)/1000;
+        devv = floor(1000* devv)/1000;
+        chvv = floor(1000* chvv)/1000;
+        covv = floor(1000* covv)/1000;
+
+
+
+// CHARACTER SLIDER ENCODING
+        (slider2  != slider2old)  || (reset == 1) || (up2 > 0) ? (
+            up2 > 0 ? up2 -= 1;
+
+// New 4-Character Order:
+            multi(slider2, 0.33,1, 1,1, 0.67); 
+            sli2_7 = m;
+
+
+            progatt = (1-chvv)^2.3 * 20  +  sli2_7^1 * 26 * (1- max(0, chvv-0.67)/0.33)^0.5 ;
+            progrel = ( (1-chvv)^3.3 * 190 +10 ) + sli2_7^1.3 * 140 * (1- max(0, chvv-0.67)/0.33)^0.5;
+            prograt = chvv^1 * 7 + 5;
+            progden = (1- min(1, chvv/0.33)) * 90 + 10  *  (1- max(0, chvv-0.33)/0.67);
+            progden < 0.1 ? progden = 0.1;
+            
+            progatt = floor(progatt*100)/100;
+            progrel = floor(progrel);
+            prograt = floor(prograt*10)/10;
+            progden = floor(progden*10)/10;
+            
+            
+            
+            slider18 = (1-slider23^0.25) * 99.9 + 0.1;
+            
+            
+            slider9 = progatt + offatt;
+            slider10 = progrel + offrel;
+            slider5 = prograt + offrat;
+            slider18 = progden + offden;
+
+            slider9 > 50 ? slider9 = 50;
+            slider10 > 500 ? slider10 = 500;
+            slider5 > 12 ? slider5 = 12;
+            slider18 > 100 ? slider18 = 100;
+        
+            );
+
+ 
+ 
+        
+        
+        
+        (character == 0) || (reset == 1) || (up20 > 0) ? (
+            up20 > 0 ? up20 -= 1;  
+            slider20 = (slider9 /50 )^0.5 ;
+            slider21 = ((slider10 -5) /495)^(1/2);
+            slider22 = (slider5-1) /11;
+            slider23 = (1- (slider18-0.1)/99.9)^4;
+            reset == 1 ? reset = 0;
+            );
+        
+        slider6 = ( max(0, slider9 - 7) / 43)^2.5   * 30; // RMS from Attack
+
+        slider9 < 0 ? slider9 = 0;
+        slider10 < 5 ? slider10 = 5;
+        slider5 < 1 ? slider5 = 1;
+        slider18 < 0.1 ? slider18 = 0.1;
+
+        makeup = 0;
+        
+
+
+
+
+    // Auto-Makeup
+
+        detexp = 0.5 + (devv)^3 * 0.4;
+        detexp = floor(1000* detexp)/1000;
+        detmulti = 1 + (devv)^3 * 0.2;
+        detmulti = floor(1000* detmulti)/1000;
+        
+        thresh = slider1 * (-refovermax) -3 - (1-devv) * covv * (1-ravv)^0.5 * 3 - (atvv)^0.5 * 3 ;
+        thresh = floor(thresh*10)/10;
+        thresh *= min(1, slider1/0.1);
+        slider17 = thresh;
+        threshv = f(.0001, exp(thresh * db2log) );
+        thresh2 = thresh;
+        threshv2 = f(.0001, exp(thresh2 * db2log) );
+        
+
+        refdet = f(.001, 0.5^detexp * detmulti );
+        refoverdb = max(0, log(refdet/threshv) * log2db);
+//        pkbrake == 0 ? refoverdb -= refoverdb*0.05 +1 + devv;
+        pkbrake == 0 ? refoverdb -= covv^0.5 * 2;
+        refcratio = 1+(ratio-1) * sqrt(refoverdb/bias);
+        refgr = ( -refoverdb * (refcratio-1)/refcratio * (covv^0.8/covv) ) -3;
+
+        refmu = -2.5;
+
+
+
+
+        refgr += 16 +8 - pkbrake^3 * 7;
+
+
+// Started at atvv 1, revv 0, devv 1 (loudest). First individuals:
+
+        refgr -= (1-atvv)^20 *12 ;
+        refgr -= atvv^2 * 2;
+//        refgr -= (atvv*(1-atvv)*4)^2 *1.5;
+//        refgr += (atvv*(1-atvv)*4) * (2);
+        multi(atvv,0.01,1, 0.5,2, 0.2);
+        atvv2 = m;
+        refgr -= atvv2 * 5 ;
+
+        refgr -= revv^0.4 * 7;
+//        refgr -= (1-revv)^2 *2;
+//        multi(revv, 0,1, 0.2,4, 0.5);
+//        revv5 = m;
+//        refgr -= revv5 * 2 ;//* atvv^0.3;
+
+        refgr -= (1-devv)^0.25 * 7;
+
+        
+        refgr += max(0, 1-atvv/0.05) * revv^0.6 * 3;
+        refgr += max(0, 1-atvv/0.05) * (1-devv)^1 * 6;
+        multi(atvv, 0,1, 1,2, 0.05);
+        atvv05 = m;
+        refgr += atvv05 * revv^0.5 * (1-devv)^0.5 * 5;
+        refgr += atvv * revv^0.5 * (1-devv)^3 * 3;
+        refgr += (1-atvv)^3 * devv^3 * 1;
+        
+        
+        multi(devv,0,1, 2,1, 0.99);
+        devv99 = m;
+        refgr -= devv99 * 1;
+        refgr += devv99 * (1-revv) * 2;
+        refgr += atvv * revv^0.15 * devv99 * 2;
+        multi(devv,0,1, 3,0.25, 0.9);
+        devv9 = m;
+        refgr += (1-atvv) * revv^2 * ( devv9)^1  * 4;
+        refgr += (1-atvv)^2 * ( devv9)^1  * 2;
+        
+        refgr -= covv^3 * 2;
+//        refgr += atvv * revv^0.15 * ( devv*(1-devv)*4)^2  * 2;
+//        refgr += (1-atvv) * revv^1 * ( devv*(1-devv)*4)^2 * 4;
+//        refgr -= atvv2 * (revv*(1-revv)*4)^0.5 * 2;
+//        refgr += revv * devv * 1;
+
+
+
+
+
+
+
+        refgr > 0 ? refgr = 0;
+        refovermax = 42;
+        refmu_ = refmu * (-refgr/refovermax) + slider3 * (1-volmode);
+        makeup = max(0, -refgr + refmu_) * covv^0.1;
+
+
+        ratio = (slider5) ;//* 1 (1-devv)^0.2 * (ravv^0.1) * 2;
+
+        outvol_ = slider3 * volmode;
+        outvol =  2^(outvol_/6) ;
+    
+
+        rmstime = slider6 / 1000000;
+        
+        ratio < 0.2 ? ratio = 0.2;
+        ratio2 = ratio;
+//        bias = slider18;
+//        bias = slider18 * (1 + max(0, (slider18-20)/80) );
+        bias = slider18 * (1 + (slider18/100)^2 );
+        
+        
+        
+        
+        
+        attime = slider9/1000;
+        attime < 0.0001 ? attime = 0.0001;
+        atcoef = exp(-1 / (attime * srate));
+        rmscoef=exp(-1/(rmstime * srate));
+    
+
+        );
+    
+    
+    
+    // Damp makeup gain for fast Character changes
+    damper < 1 ? (
+      damper += 0.3 / ((1-damper)*4)
+      );
+    damper > 1 ? damper = 1;
+    makeupsum = makeup * damper;
+    makeupv = exp(makeupsum * db2log);
+    
+    
+
+    slider2old = slider2;
+    
+    
+    thrbrakedb = -(   (-refgr)^0.95 +1 + pkbrake^1 * 18    -  0*(atvv)^1 - 2*(1-covv)^1  + busmax^3 *4 * covv^0.2 + (atvv*(1-atvv)*4)^2 * 0);
+    thrbrakedb *= covv^0.2;
+    thrbrakedb = floor(10* thrbrakedb)/10;
+    thrbrake = 2^(thrbrakedb/6);
+    
+    ranlim = 0.09;
+    
+    
+    
+    );    //// END PSEUDOBLOCK ////
+
+
+
+
+
+meter_l_run = abs(spl0);
+meter_r_run = abs(spl1);
+meter_mid_run = (abs(spl0+spl1))/2;
+
+meter_l_pk = max(meter_l_pk , meter_l_run);
+meter_r_pk = max(meter_r_pk , meter_r_run);
+meter_mid_pk = max(meter_mid_pk , meter_mid_run);
+
+
+spl0 *= gbrake;
+spl1 *= gbrake;
+
+
+
+
+
+// COMPRESSOR MID
+aspl0 = abs(spl0);
+aspl1 = abs(spl1);
+maxspl = max(aspl0, aspl1);
+
+
+runave = maxspl + rmscoef * (runave - maxspl);
+
+det = max(0,runave)^ (detexp) * (detmulti);
+//det *= detbrake * detflt;
+det *=  detflt;
+
+// OPTO  MID
+//reltime =( (slider10) /63)/(-gr*1+1) ;
+//reltime =( (slider10) /63)/(-gr*2.5+1) ;
+reltime =( (slider10) /63)/(-gr^1.1*0.85+1) ;
+//reltime =( (slider10) /63)/(-gr^1.2*0.65+1) ;
+
+
+reltime < 0.0001 ? reltime = 0.0001;
+reltime > 0.5 ? reltime = 0.5;
+relcoef = exp(-1 / (reltime * srate));
+
+overdb = log(det/threshv) * log2db;
+overdb = max(0,overdb);
+ 
+overdb > rundb ? (
+    rundb = overdb + atcoef * (rundb - overdb);
+    ) : (
+    rundb = overdb + relcoef * (rundb - overdb) ;//*0.999;
+    );
+
+overdb = max(rundb,0);
+
+cratio = 1 + (ratio-1) * sqrt((overdb + dcoffset) / (bias + dcoffset));
+
+gr = -overdb * (cratio-1)/cratio;
+grv = exp(gr * db2log);
+grv > 1 ? grv = 1;
+
+
+
+// COMPRESSOR SIDE
+
+midside == 1 ? (
+    
+//    maxspl2 = abs(spl0 - spl1) * 1.15 ;
+    maxspl2 = abs(spl0 - spl1) + max(abs(spl0),abs(spl1)) * 0.2 * 0;
+    runave2 = maxspl2 + rmscoef * (runave2 - maxspl2);
+    
+    det2 = max(0,runave2)^ (detexp) * (detmulti);
+//    det2 *= detbrake * detflt;
+    det2 *=  detflt;
+    
+    // OPTO  SIDE
+//    reltime2 =( (slider10) /63)/(-gr2*1+1) ;
+    reltime2 =( (slider10) /63)/(-gr2^1.1*0.85+1) ;    
+//    reltime2 =( (slider10) /63)/(-gr2^1.2*0.65+1) ;
+     
+    reltime2 < 0.0001 ? reltime2 = 0.0001;
+    reltime2 > 0.5 ? reltime2 = 0.5;
+    relcoef2 = exp(-1 / (reltime2 * srate));
+    
+    overdb2 = log(det2/threshv) * log2db;
+    overdb2 = max(0,overdb2);
+
+    overdb2 = (overdb+overdb2*2)/3;
+  
+    overdb2 > rundb2 ? (
+        rundb2 = overdb2 + atcoef * (rundb2 - overdb2);
+        ) : (
+        rundb2 = overdb2 + relcoef2 * (rundb2 - overdb2);
+        );
+    overdb2 = max(rundb2,0);
+    cratio2 = 1 + (ratio2-1) * sqrt((overdb2 + dcoffset) / (bias + dcoffset));
+    
+    gr2 = -overdb2 * (cratio2-1)/cratio2;
+    grv2 = exp(gr2 * db2log);
+    grv2 > 1 ? grv = 1;
+
+
+    grv = grv*(1-link) + min(grv,grv2) * link;
+//             grv2 < grv ? grv2 = (grv + grv2) /2; 
+    grv2 = grv2*(1-link) + min(grv,grv2) * link;
+    
+    inmid = (spl0 + spl1)/2;
+    inside = (spl0 - spl1)/2;
+
+    splmid = inmid * (grv);
+    splside = (inside * grv2 );
+
+    spl0 = (splmid + splside );
+    spl1 = (splmid - splside );
+
+        
+
+        ):(
+    
+    grv2 = grv;
+
+    spl0 *= grv;
+    spl1 *= grv;
+
+    );
+
+
+
+
+
+
+
+
+inbrake = max(abs(spl0),abs(spl1)) ;
+
+//thrbrakedb = -(   (-refgr)^0.95 +6    + 5 / (detbrake*2-1)  -  3*(atvv)^1 - 2*(1-covv)^1  );
+
+pkbrake > 0 ? (
+
+  inbrake > (thrbrake) ? (
+//    gbrake /= max(0, inbrake/(thrbrake)-1 ) * (grv^0.25 *0.25+0.75) * 1 +1;
+    gbrake /= max(0, inbrake/(thrbrake)-1 ) * ((0.0001*rate+1)-gbrake)^0.1  +1;
+//    brakecnt = 1;
+
+//    attbrakea < 1 ? attbrakea += 0.2;
+
+    ):(
+//  (brakecnt < 10000) ? (brakecnt *= 0.0001*rate+1);
+    gbrake *= ((0.0003*rate)  / gbrake) * (1-gbrake^4) +1;
+//    gbrake *= (0.0003  / gbrake) * (1-gbrake^4) * (brakecnt-1) +1;
+    detbrake /= (0.00003*rate) * (detbrake-1)  +1;
+    );
+  
+  brakemode = 2;
+  brakemode == 1 ? detbrake += (1/gbrake-1) * (0.0001*rate) / detbrake^2;  
+  brakemode == 2 ? (
+    detbrake_ = (1/gbrake-1) * (gbrake * 0.5) +1;
+    detbrake_ > detbrake ? (
+      detbrake *= max(0, detbrake_/detbrake );
+//      detbrake *= max(0, detbrake_/detbrake -1) * (1- gr/refovermax) +1;
+      );
+    );
+  brakemode == 3 ? (
+    detbrake_ = (1/gbrake-1) * 0.25+1;
+    detbrake_ > detbrake ? (
+      detbrake *= max(0, detbrake_/detbrake -1) * 0.2 +1;
+      detflt = detbrake;
+      );
+    );
+
+  ):(
+  gbrake = detbrake = 1;
+  );
+
+
+//detflt *= max(0, (detbrake-0.9)/(detflt-0.9) -1) * detbrake^0.25 +1;
+//detflt /=  (0.00002 *(detflt-1)) +1;
+
+//detflt *= (max(0, (detbrake-0.9)/(detflt-0.9)) * (detbrake-1)^1 * 0.00003 ) / detflt +1;
+//detflt /= 1.000003;
+
+//gbrake != 1 ? : (fltmulti = 1);
+//fltmulti *= 0.0003 * gbrake^20 +1;
+
+floattype = 2;
+floattype == 1 ? (
+  //detflt *= ((1-gbrake) * 0.0007 ) / (detflt^2 ) +1;
+  detflt *= ((1/gbrake-1) * 0.001 ) / (detflt^4 ) +1;
+  (fltdir > 1) ? (fltmulti = 10) : (fltmulti *= (0.0004*rate +1));
+  fltmulti > 100 ? fltmulti = 100;
+  detflt /= ((0.000001*rate) * fltmulti * gbrake^10 * (detflt-1)) / (1/detflt) +1;
+  );
+floattype == 2 ? (
+  //detflt *= ((1-gbrake) * 0.0007 ) / (detflt^2 ) +1;
+  detflt *= ((1/gbrake-1) * (0.001*rate) ) / (detflt^4 ) +1;
+  (fltdir > 1) ? (fltmulti = 20) : (fltmulti *= (0.001*rate +1) );
+  fltmulti > 100 ? fltmulti = 100;
+  detflt /= ((0.000001*rate) * fltmulti * gbrake^10 * (detflt-1)^2) * (detflt^2) +1;
+  );
+
+
+//detflt = 1;
+
+detflt < 1 ? detflt = 1;
+detflt > 5 ? detflt = 5;
+fltdir = detflt/detfltold; 
+detfltold = detflt;
+
+
+detbrake < 1 ? detbrake = 1;
+
+
+gbrake < 0.01 ? gbrake = 0.01;
+gbrake > 1 ? gbrake = 1;
+
+
+
+
+spl0 *= makeupv;
+spl1 *= makeupv;
+
+busmax = max(abs(spl0),abs(spl1));
+
+
+spl0 *= outvol;
+spl1 *= outvol;
+
+
+
+inlim = max(abs(spl0),abs(spl1));
+glim = (MIN(0.99,inlim+ranlim) -ranlim/(MAX(0,inlim-(1-ranlim))+1)^(1/ranlim)  )  / inlim;
+glim > 1 ? glim = 1;
+glim < 0.01 ? glim = 0.01;
+
+spl0 *= glim;
+spl1 *= glim;
+
+
+limmm = max(limmm,inlim);
+inlim >= 1 ? peak = 1;
+inlim > 1.2 ? peak = 2;
+inlim > 2 ? peak = 3;
+
+
+
+
+m_clip = 0.999;
+
+spl0 > m_clip ? spl0 = m_clip;  spl0 < -m_clip ? spl0 = -m_clip;
+spl1 > m_clip ? spl1 = m_clip;  spl1 < -m_clip ? spl1 = -m_clip;
+
+
+
+
+
+
+metero_l_run = abs(spl0) ;
+metero_r_run = abs(spl1) ;
+metero_mid_run = (abs(spl0+spl1))/2;
+
+metero_l_pk = max(metero_l_pk , metero_l_run);
+metero_r_pk = max(metero_r_pk , metero_r_run);
+metero_mid_pk = max(metero_mid_pk , metero_mid_run);
+
+meter_grv1_run = grv * gbrake * (1/detflt);
+meter_grv2_run = grv2 * gbrake * (1/detflt);
+meter_grv1_pk = min(meter_grv1_pk, meter_grv1_run);
+meter_grv2_pk = min(meter_grv2_pk, meter_grv2_run);
+
+
+
+
+
+
+
+
+
+spl2 = spl2_;
+
+
+
+
+
+
+offline = 0;
+
+@gfx 441*gfx_ext_retina 222*gfx_ext_retina
+//  r = gfx_ext_retina = 1;
+
+
+offline >= 1 ? rate = 1;
+
+scalecnt += 1;
+scalecnt > 20 ? (
+  scalecnt = 0;
+  r = gfx_ext_retina;
+  r == 0 ? r = 1;
+  
+  (gfx_w != gfx_wold) || (gfx_h != gfx_hold) ? (
+    scalex =  ( gfx_w / 441);
+    scaley = ( gfx_h / 222);
+    (scalex /= r); (scaley /= r);
+    (scalex < 0.95) || (scaley < 0.9) ? (scalenr = 0.5) :
+     (scalex > 1.9) && (scaley > 1.8) ? (scalenr = 2) :
+     scalex > 1.45 && scaley > 1.4 ? scalenr = 1.5 :
+     
+     scalenr = 1;
+    
+    scale = scalenr/2*r;
+    scale != scaleold ? up31 = 1;
+    );
+  gfx_wold = gfx_w;
+  gfx_hold = gfx_h;
+  scaleold = scale;
+  );
+
+
+
+switcha < 1 ? (
+    switcha += 0.2*rate; 
+    upleft += 1;
+    ):(
+    switcha = 1;
+    );
+character != characterold ? (
+    switcha = 0;
+    );
+characterold = character;
+
+
+
+upall > 0 ? (
+    upall -= 1;
+    drawknob = 1;
+//    upknob = 1;
+    upwood = 1;
+    upslider = 1;
+    upleft = 1;
+    upedit = 1;
+    upgr = 1;
+    up30 = 1;
+    up31 = 1;
+    upnumber = 2;
+    upatdef = 1;
+    );
+
+
+
+
+gfxinitok == 0 ? upgfxinit = 1;
+
+upgfxinit > 0 ? (
+    upgfxinit -= 1;
+    gfxinitok = 1;
+    
+    scale < 0.25 ? scale = 0.5 * max(1, gfx_ext_retina);
+    fon = "Arial";
+    gfx_setfont(1, fon, 36, 'bi');   // Character/Precise, Compress
+    gfx_setfont(2, fon, 24, 'bi');   // Lists, mrelwood, dB, Attack
+    gfx_setfont(3, fon, 24, 'i');   // Meter scale
+    gfx_setfont(4, fon, 46, 'bi');   // Main title
+    gfx_setfont(5, fon, 22, 'i');   // "Limited"
+    gfx_setfont(6, fon, 28, 'i');   // Relative button (N/A)
+    gfx_setfont(7, fon, 48 , 'bi');   // Meter titles / Details
+
+    // MEASUREMENTS
+    
+    paw = 940;
+    pah = 500;
+    // chary
+    gfx_setfont(1);
+    charstr = "Character";
+    gfx_measurestr(charstr, charstrw, charh);
+    chary = 400 - charh * 0.95;
+    
+    // Relative vol box
+    gfx_setfont(2);
+    //gfx_set(0,0,0,0.2, 0);
+    gfx_measurestr(" Relative ", boxrelw, boxrelh);
+    boxrelw += 2;
+    boxrely = 15;
+    
+// Edit box measures
+    gfx_setfont(3);
+    gfx_measurestr("  Offset  ", offw, offh);
+    gfx_measurestr("  Reset  ", resw, resh);
+    
+    gfx_setfont(1);
+    gfx_measurestr(" Character " , charw , charh);  
+    slidx = 190;
+    charx = slidx - charw/2;
+    
+
+    
+    gfx_setfont(2);
+    box3y = chary + gfx_texth * 0.08 *0;
+    
+    slid2x = paw - 140;
+    slid2w = 40;
+    knbx = 35;
+    knbtxtx = 34;
+    knbt = 170;
+    knbd = 70;
+    knbw = 60;
+    knbh = 30;
+    knb1b = 70;
+    knb2b = knb1b+knbd;
+    knb3b = knb1b+knbd*2;
+    knb4b = knb1b+knbd*3;
+    knb1y = knb1b + knbtxtx;
+    knb2y = knb2b + knbtxtx;
+    knb3y = knb3b + knbtxtx;
+    knb4y = knb4b + knbtxtx;
+    
+    trkw = 16;
+    trktop = 20;
+    trkbot = chary - 10;
+//    trkw = knbt + knbw;
+    knbth = 10;
+    trk2w = 12;
+    trkvoltop = boxrely+boxrelh+6 ;
+    trkvolbot = box3y - 6;
+    voltrih = 20;
+    voltriy = trkvolbot - (trkvolbot-trkvoltop)/2;
+    
+    
+    gradh = 38;
+    midh = 14; 
+    slidw = 60;
+    slidh = gradh*2 + midh;
+    
+    grad2h = 35;
+    mid2h = 20;
+    slid2h = grad2h*2 + mid2h;
+    
+    mtrw = 40;
+    mtrinx = 555;
+    mtrgrx = mtrinx + mtrw +10;
+    atdefsize = 0.7;
+    atdefh = slid2h * atdefsize;
+    atdefw = mtrw * atdefsize;
+    atdefx = mtrgrx + mtrw + 10 + atdefw/2;
+    atdefx1 = atdefx - atdefw/2 +1;
+    
+    mtroutx = atdefx1 + atdefw + 9;
+//    mtroutx = mtrgrx + mtrw + 10;
+    mtrtop = 45;
+    mtrbot = chary + 0;
+    mtrh = mtrbot - mtrtop ;
+    mtrgr1 = mtrgr2  = 1;
+    
+    actx = 30;
+    acty = 20;
+    offx = 40 ;
+    offy = 17;
+    resx = slidx - resw * 0.6;
+    resy = offy;
+    resh = offh;    
+    
+    mtrpad = 2;
+    mtrwper = floor((mtrw-pad*2)/3);
+    mtrpkdecay = 1.05;
+    mtrpkhold = 10;
+    mtrdc = 4;
+    
+    grdc = 1;
+    grpkdc = 4;
+    
+    listx1 = 42;
+    listlinex = 32;
+    listw = 32;
+    listy1 = chary +3;
+    listh = 6;
+    listy2 = listy1 + listh*2;
+    listy3 = listy2 + listh*2;
+
+    pkatth = f(1, (0.5 *0.8 + 0.2)^0.7 * pkh );
+    pkatty = f(1, pky + pkh - pkatth );
+
+
+    // PREPARE BLITS
+
+//    gfx_dest = 1;
+    gfx_setimgdim(1, -1, -1);   gfx_setimgdim(1, paw-100,400); 
+
+//        gfx_dest = 2;
+    gfx_setimgdim(2, -1, -1);   gfx_setimgdim(2, paw-100,400); 
+        
+//                gfx_dest = 3;
+    gfx_setimgdim(3, -1, -1);   gfx_setimgdim(3, paw-100,400);
+  
+  //            gfx_dest = 4;
+    gfx_setimgdim(4, -1, -1);   gfx_setimgdim(4, paw-100,400);
+  
+//    gfx_dest = 5;
+    gfx_setimgdim(5, -1, -1);   gfx_setimgdim(5, paw-100,400);
+
+//        gfx_dest = 6;
+    gfx_setimgdim(6, -1, -1);   gfx_setimgdim(6, 100,100);
+
+    gfx_setimgdim(7, -1, -1);  gfx_setimgdim(7, 400, 400); 
+
+    gfx_setimgdim(8, -1, -1);   gfx_setimgdim(8, paw-100,400);
+    gfx_setimgdim(9, -1, -1);   gfx_setimgdim(9, paw-100,400); // ?
+    gfx_setimgdim(11, -1, -1);   gfx_setimgdim(11, paw-100,400); // Branch, needed?
+
+
+
+    gfx_setimgdim(12, -1, -1);   gfx_setimgdim(12, paw-100,400);
+
+//    gfx_dest = 13;
+    gfx_setimgdim(13, -1, -1);   gfx_setimgdim(13, paw,400);
+    
+//        gfx_setimgdim(14, -1, -1);  gfx_setimgdim(14, 1000, 500); 
+
+    gfx_setimgdim(14,-1,-1);     gfx_setimgdim(14,paw-100,400); 
+
+// prep left
+//    gfx_dest = 15;
+    gfx_setimgdim(15,-1,-1);     gfx_setimgdim(15,paw-100,400); 
+
+// Prepare edit boxes
+//    gfx_dest = 16;
+    gfx_setimgdim(16, -1, -1);  gfx_setimgdim(16, 400, 200); 
+    gfx_setimgdim(26, -1, -1);  gfx_setimgdim(26, 400, 200); 
+    gfx_setimgdim(17, -1, -1);  gfx_setimgdim(17, 400, 200); 
+    
+//        gfx_dest = 17;
+    gfx_setimgdim(18, -1, -1);  gfx_setimgdim(18, paw-100, 400); // ?
+    gfx_setimgdim(19, -1, -1);  gfx_setimgdim(19, paw-100, 400); // ?
+
+    
+//        gfx_dest = 30;
+    gfx_setimgdim(30, -1, -1);  gfx_setimgdim(30, paw+100, 500); 
+    gfx_setimgdim(31, -1, -1);  gfx_setimgdim(31, paw+100, 500); 
+    gfx_setimgdim(32, -1, -1);  gfx_setimgdim(32, paw-50, 450); 
+    gfx_setimgdim(10, -1, -1);   gfx_setimgdim(10, paw,pah);
+
+
+
+
+
+
+
+
+// DRAW ALL SLIDERS
+    gfx_dest = 19;
+    gfx_x = gfx_y = 0;
+    gfx_set(1,1,1,0.3,0);
+//    gfx_rect(0,0,800,400);
+    
+    // DRAW CHARACTER SLIDER
+    
+    gfx_gradrect(5,5,slidw,gradh , 1,1,1,0.8, 0,0,0,0, -0.3/gradh,-0.3/gradh,-0.3/gradh,0.2/gradh);
+    gfx_set(0.7,0.7,0.7,1 ,0);
+    gfx_rect(5,5+gradh,slidw,midh);
+    gfx_gradrect(5,5+gradh+midh,slidw,gradh ,  0.7,0.7,0.7,1, 0,0,0,0, 0.3/gradh,0.3/gradh,0.3/gradh,-0.3/gradh);
+
+    sgrey = 0.3;
+    sedgew = 3;
+    gfx_set(sgrey,sgrey,sgrey,0.5 ,0);
+    gfx_rect(5,5,sedgew,slidh);
+    gfx_rect(5+slidw-sedgew,5,sedgew,slidh);
+    
+    col(12);
+    gfx_y = 5+15;
+    y = gfx_y;
+    while(y < 5+slidh-15)(
+        gfx_x = 5+5;
+        gfx_rectto(5+slidw-5,y+2);
+        y += 8;
+        gfx_y = y;
+        );
+
+    // Draw Eco Slider 1
+    slidecow = 50;
+    col(98);
+    gfx_rect(100,5  ,  slidecow,slidh);
+    col(99);
+    gfx_rect(100+edge,5+edge,  slidecow-edge*2,slidh-edge*2);
+    
+
+    // Draw Relative volume slider
+    greyx = -0.1;
+    red = -0.0;
+    blue = -0.03;
+    gfx_gradrect(200,5,slid2w,gradh , 1+red,1,1+blue,0.8, greyx/slid2w,greyx/slid2w,greyx/slid2w,0, -0.3/gradh,-0.3/gradh,-0.3/gradh,0.2/gradh);
+//    gfx_set(0.7,0.7,0.7,1 ,0);
+    gfx_gradrect(200,5+gradh,slid2w,midh, 0.7+red,0.7,0.7+blue,1 , greyx/slid2w,greyx/slid2w,greyx/slid2w,0);
+    gfx_gradrect(200,5+gradh+midh,slid2w,gradh ,  0.7+red,0.7,0.7+blue,1, greyx/slid2w,greyx/slid2w,greyx/slid2w,0, 0.3/gradh,0.3/gradh,0.3/gradh,-0.3/gradh);
+
+    gfx_set(sgrey,sgrey,sgrey,0.5 ,0);
+    gfx_rect(200,5,sedgew,slid2h);
+    gfx_rect(200+slid2w-sedgew,5,sedgew,slid2h);
+
+
+     col(12);
+     gfx_y = 5+15;
+     y2 = gfx_y;
+     while(y2 < 5+slid2h-15)(
+         gfx_x = 200+5;
+         gfx_rectto(200+slid2w-5,y2+2);
+         y2 += 8;
+         gfx_y = y2;
+         );     
+
+/*
+    // Draw Normal Vol Slider
+    gfx_gradrect(300,5,slid2w,grad2h , 1,1,1,0.87,  0,0,0,0, 0/grad2h,0/grad2h,0/grad2h,-0.1/grad2h);
+    gfx_set(1,0.96,0.96,0.77 ,0);
+    gfx_rect(300,5+grad2h,slid2w,mid2h);
+    gfx_gradrect(300,5+grad2h+mid2h,slid2w,grad2h , 1,1,1,0.77, 0,0,0,0, -0.1/grad2h,-0.05/grad2h,0,0.1/grad2h);
+*/
+    col(98);
+//    gfx_set(0.2,0.1,0.1,1,0);
+    gfx_rect(300,5,slid2w,slid2h);
+
+    edge2 = 2;
+    edge3 = 3;
+    red1 = -0.1;
+    red2 = -0.15;
+    grey = 0.8;
+    greya = 1.0;
+    grey2 = 1;
+    greya2 = 0.5;
+    grey3 = 0.65;
+    greya3 = 1.05;
+    greyx = -0.1;
+    // Draw Normal Vol Slider
+    gfx_gradrect(300+edge3,5+edge3,slid2w-edge3*2,grad2h-edge3 , grey+red1,grey,grey,greya,
+     greyx/(slid2w-edge2*2),greyx/(slid2w-edge2*2),greyx/(slid2w-edge2*2),0 ,
+     (grey2-grey + (red2-red1)/3 )/(grad2h-edge2*2),(grey2-grey)/(grad2h-edge2*2),(grey2-grey)/(grad2h-edge2*2),(greya2-greya)/(grad2h-edge2*2));
+    gfx_gradrect(300+edge3,5+grad2h,slid2w-edge3*2,mid2h  ,  grey2+ (red2-red1)/3,grey2,grey2,greya2,  
+     greyx/(slid2w-edge2*2),greyx/(slid2w-edge2*2),greyx/(slid2w-edge2*2),0  ,  ((red2-red1)/3)/(midh),0.05/midh,0,0);
+//    gfx_set(grey2-0.05,grey2,grey2,greya2);
+//    gfx_rect(300+edge3,5+grad2h,slid2w-edge3*2,mid2h);
+    gfx_gradrect(300+edge3,5+grad2h+mid2h,slid2w-edge3*2,grad2h-edge3 , grey2+ (red2-red1)/3*2,grey2-0.05,grey2,greya2,
+     greyx/(slid2w-edge2*2),greyx/(slid2w-edge2*2),greyx/(slid2w-edge2*2),0 ,
+     (grey3-grey2+ (red2-red1)/3)/(grad2h-edge2*2),(grey3-grey2+0.1)/(grad2h-edge2*2),(grey3-grey2)/(grad2h-edge2*2),(greya3-greya2)/(grad2h-edge2*2));
+
+
+
+    col(12);
+    gfx_y = 5+15;
+    y2 = gfx_y;
+    while(y2 < 5+slid2h-15)(
+        gfx_x = 300+1+5;
+        gfx_rectto(300+slid2w-1-5,y2+2);
+        y2 += 8;
+        gfx_y = y2;
+        );
+
+
+    // Draw Eco Vol Sliders
+    col(98);
+    gfx_rect(400,5,slid2w,slid2h);
+    col(99);
+    gfx_rect(400+edge ,5+edge,slid2w-edge*2,slid2h-edge*2);
+    
+    col(99);
+    gfx_rect(500,5,slid2w,slid2h);
+    col(98);
+    gfx_rect(500+edge ,5+edge,slid2w-edge*2,slid2h-edge*2);
+
+
+
+// Small detail slider knobs
+    col(98);
+//    gfx_set(0.2,0.1,0.1,1,0);
+    gfx_rect(600,5,knbw,knbh);
+    edge2 = 2;
+    grey = 0.7;
+    greya = 1.0;
+    grey2 = 0.8;
+    greya2 = 0.8;
+    grey3 = 0.85;
+    greya3 = 1.0;
+    gfx_gradrect(600+edge2,5+edge2,knbw/2-edge2,knbh-edge2*2,  grey-0.05,grey,grey+0.05,greya,  
+     (grey2-grey)/(30-edge2*2),(grey2-grey)/(30-edge2*2),(grey2-grey-0.05)/(30-edge2*2),(greya2-greya)/(30-edge2*2));
+    gfx_gradrect(600+knbw/2,5+edge2,knbw/2-edge2,knbh-edge2*2, grey2-0.05,grey2,grey2,greya2, 
+     (grey3-grey2)/(30-edge2*2),(grey3-grey2)/(30-edge2*2),(grey3-grey2-0.05)/(30-edge2*2),(greya3-greya2)/(30-edge2*2));
+    col(12); gfx_a -= 0.2;
+    stripew = 5;
+    gfx_x = x = 600+ 12;
+    y = 5+edge2+4;
+    y2 = y + knbh -edge2*2-8;
+    while (x < 600+  knbw -10)(
+        gfx_line(x,y,x,y2);
+        x += stripew;
+        );
+    
+    
+    // Draw Small Detail slider eco knobs
+    col(98);
+    gfx_rect(700,5,knbw,knbh);
+    col(99);
+    gfx_rect(700+edge,5+edge,knbw-edge*2,knbh-edge*2);
+    
+    
+    // DRAW METER LINES
+    gfx_dest = 13;
+    gfx_setfont(3);
+    gfx_set(grey6,grey6,grey6,0.3 , 0);
+    col(0);
+    gfx_line(mtrinx,mtrtop , mtroutx+mtrw , mtrtop);
+    multi = 0.5;
+    mtrexp = 0.5;
+    first = 1;
+    loop(5,
+        gfx_y = mtrbot - (mtrh * multi^mtrexp );
+        gfx_rect(mtrinx,gfx_y , mtroutx+mtrw-mtrinx , 2);
+        gfx_x = mtrinx -gfx_texth * 1.5;
+        first == 1 ? gfx_x += 6;
+        first += 1;
+        gfx_y -= gfx_texth /2;
+        gfx_a += 0.3;
+        gfx_drawnumber( log10(multi) *20 ,0);
+        gfx_a -= 0.3;
+        multi /= 2;
+        gfx_a -= 0.07;
+        );
+
+
+
+
+
+
+
+    // DRAW EDIT BUTTONS (inactive)
+    gfx_dest = 16;
+    gfx_x = gfx_y = 0;
+
+// Save Offset box
+    col(17);
+//    gfx_a = 0.8;
+    gfx_rect(offx, offy,offw,offh * 2);
+//    gfx_set();
+//    gfx_a = 1;
+    col(16);
+    gfx_rect(offx, offy,offw,offh * 2 ,0);
+
+// Reset Offset box
+    col(17);
+    gfx_rect(resx, resy,resw,offh*2);
+    col(16);
+    gfx_rect(resx, resy,resw,offh*2 ,0);
+    
+// Edit button frames
+    gfx_set(1,1,1,0.5 * offreseta ,0);
+    gfx_rect(offx, offy,offw,offh * 2 , 0);
+    gfx_rect(resx, resy,resw,offh * 2 , 0);
+
+// EDIT BUTTON TEXTS
+    gfx_setfont(3);
+    col(1);
+
+    gfx_a = 0.8;
+    
+    gfx_x = offx + offw/2 -1;
+    gfx_y = offy+2;
+    gfx_drawstr("Save",257,gfx_x,gfx_y);
+    gfx_x = offx + offw/2 -1;
+    gfx_y += gfx_texth;
+    gfx_drawstr("Offset",257,gfx_x,gfx_y);
+    
+    gfx_x = resx + resw/2;
+    gfx_y = resy + gfx_texth * 0 +2;
+    gfx_drawstr("Reset",257,gfx_x,gfx_y);
+    gfx_x = resx + r + resw/2;
+    gfx_y = resy + gfx_texth * 1 +2;
+    gfx_drawstr("Offset",257,gfx_x,gfx_y);
+
+
+
+    // DRAW EDIT BUTTONS ACTIVE
+    gfx_dest = 26;
+    gfx_x = gfx_y = 0;
+
+// Save Offset box
+    col(17);
+//    gfx_a = 1;    
+    gfx_rect(offx, offy,offw,offh * 2);
+
+// Reset Offset box
+    gfx_rect(resx, resy,resw,offh*2);
+    
+// Edit button frames
+    gfx_set(1,1,1,0.5  ,0);
+//    col(3);
+    gfx_rect(offx, offy,offw,offh * 2 , 0);
+    gfx_rect(resx, resy,resw,offh * 2 , 0);
+
+// EDIT BUTTON TEXTS
+    gfx_setfont(3);
+    col(3);
+
+    gfx_a = 1;
+    
+    gfx_x = offx + offw/2 -1;
+    gfx_y = offy +2;
+    gfx_drawstr("Save",257,gfx_x,gfx_y);
+    gfx_x = offx + offw/2 -1;
+    gfx_y += gfx_texth;
+    gfx_drawstr("Offset",257,gfx_x,gfx_y);
+    
+    gfx_x = resx + resw/2;
+    gfx_y = resy + gfx_texth * 0 +2;
+    gfx_drawstr("Reset",257,gfx_x,gfx_y);
+    gfx_x = resx + r +resw/2;
+    gfx_y = resy + gfx_texth * 1 +2;
+    gfx_drawstr("Offset",257,gfx_x,gfx_y);
+    
+    
+    
+    gfx_dest = 17;
+    gfx_x = gfx_y = 0;
+    
+    gfx_setfont(3);
+    gfx_measurestr(" Reset Offset ", actw, acth);
+    col(17);
+    gfx_rect(actx, acty,actw,acth);
+    gfx_set(1,1,1,0.5 * 1 ,0);
+    gfx_rect(actx, acty,actw,acth , 0);
+    
+    gfx_setfont(3);
+    gfx_set(1,1,1, 1 );
+    col(3);
+    gfx_x = actx;
+    gfx_y = acty +2;
+    gfx_drawstr(" Reset Offset");
+
+    );
+
+
+
+
+
+
+
+upwood > 0 ? (
+    upwood -= 1;
+    
+    gfx_dest = 10;
+    
+    eco > 0 ? (
+
+        // Eco Background
+    //  gfx_set(0.4,0.2,0.1,0.7, 0);
+        gfx_set(0.25,0.04,0.01, 1 , 0);
+        gfx_rect(0,0, 820,430);
+    
+        ):(
+    
+        // Background
+    //  gfx_set(0.4,0.2,0.1,0.7, 0);
+        gfx_set(0.45,0.25,0.15, 1 , 0);
+        gfx_rect(0,0, paw-50,450);
+
+
+        // Wood lines
+        gfx_set(0,0,0,0.7,0);
+        x = gfx_x = 0;
+        y = ystart = 0;
+        ydir = 1;
+        
+        while(ystart<450)(
+        
+            while(x<900)(
+                xrand = rand(40);
+                yrand = rand(5);
+                (y + yrand) > (ystart + 3) ? ydir = -1;
+                (y + yrand) < (ystart - 3) ? ydir = 1;
+                yrand *= ydir;
+                gfx_line(x,y,x+xrand,y+yrand);
+                x += xrand;
+                y += yrand;
+                ydir *= -1;
+                );
+            
+            x = 0;
+            ystart += 10;
+            y = ystart;
+            );
+    
+    
+        // Branch spots
+        loop(3,     // Number of spots
+            gfx_dest = 11;
+            gfx_setimgdim(11, -1, -1);   gfx_setimgdim(11, 100,100);
+            gfx_set(0,0,0, rand(0.15) + 0.85 ,0);
+            rad = f(.01, rand(1)^2 *4 + 1 );
+            gfx_circle(50,50,rad, 1,1);
+            gfx_a = 1;
+            z = 0.8;
+            loop(3,     // Circles around spot
+                gfx_circle(50,50,rad * (0.4 + z) +1, 0,1);
+                gfx_a -= 0.2;
+                z *= 1.8;
+                );
+            gfx_dest = 10;
+            gfx_set(0,0,0,0.5,0); // Branch spot darkness
+            
+            x = rand(800) -50;
+            y = rand(400) -50;
+    
+            obl = f(.01, rand(1) + 1.5 );
+            gfx_blit(11,1,rand(1)-0.5, 0,0,100,100, x ,y,100*obl,100);
+    
+            );
+    
+    
+    
+        loop(2,
+            gfx_x = gfx_y = 0;
+            gfx_blurto(1000,500);
+            );
+        );
+
+
+/*
+    // Blit Background Wood
+    gfx_dest = 30;
+    
+    gfx_x = gfx_y = 0;
+    gfx_set(1,1,1,1,0);
+    //gfx_gradrect(0,0,1000,600, 0.5,0.3,0.1,0.9, 0,0,0,0.1, 0.1,0.1,0.2,0.2); 
+    gfx_blit(10,1,0);
+*/    
+    eco == 0 ? (
+          // Wood panel tint shade
+        gfx_set(1,1,1,1,1);
+        gfx_gradrect(0,0,paw2 = (paw-50)/2,450, 1,1,1,-0.12, 0,0,0,0.08/400, 0,0,0,-0.09/400);
+        gfx_gradrect(paw2,0,paw2,450, 1,1,1,-0.04, 0,0,0,-0.1/400, 0,0,0,-0.09/400);
+        
+
+        // Fade out
+        gfx_set(1,1,1,1,0);
+        gfx_gradrect(0,400,paw-50,50, 0,0,0,0, 0,0,0,0, 0,0,0,1/40);
+        gfx_gradrect(paw-90,0,50,438, 0,0,0,0, 0,0,0,1/30);
+        gfx_gradrect(0,0,30,438, 0,0,0,1, 0,0,0,-1/30);
+        gfx_gradrect(0,0,paw-50,16, 0,0,0,1, 0,0,0,0, 0,0,0,-1/16);
+
+        );
+
+    // Atdef Slider Track
+    col(23);
+    gfx_mode = 0;
+//    gfx_a *= .6;
+    gfx_rect(atdefx-trk2w/2+4,trkvoltop+4, trk2w-5,trkvolbot-trkvoltop -4);
+
+    // Volume Slider 2 Track
+//    gfx_dest = 10;
+//    eco > 0 ? col(23) : col(13);
+    gfx_rect(slid2x-trk2w/2 , trkvoltop +4 , trk2w,trkvolbot-trkvoltop -4);
+    col(0);  gfx_a = 0.2;
+    voltrix1 = slid2x + slid2w/2 + 6;
+//    voltrix2 = ((paw-100)*3 + voltrix1) /4;
+    voltrix2 = paw-100;
+    gfx_triangle(voltrix1,voltriy , voltrix2,voltriy-voltrih/2 , voltrix2,voltriy+voltrih/2 );
+
+
+
+
+
+    // LABELS
+    
+        
+//    gfx_dest = 12;
+
+
+    
+    
+    // TEXT
+
+    gfx_setfont(1);
+    col(32); gfx_r -= 0.05; gfx_a -= 0.02;
+    gfx_x = 330;
+    gfx_y = chary ;
+    gfx_drawstr("Compress");
+
+    col(5); 
+    gfx_setfont(5);
+    gfx_x = mtrinx + mtrw/2 - 8;
+    gfx_y = atdefnry = chary + 8;
+    gfx_drawstr("In");
+    gfx_x = atdefx - 13;
+    gfx_y = atdefnry;
+    gfx_drawstr("Lim");
+
+    gfx_x = mtrgrx + mtrw/2 - 15;
+//    drag == 39 ? gfx_a += 0.9 : col(5);
+    col(5);
+    gfx_drawstr("GR");
+    gfx_x = mtroutx + mtrw/2 - 16;
+//    col(2);
+    col(5);
+    gfx_drawstr("Out");
+    gfx_a = 0.8;
+    gfx_rect(mtrgrx , gfx_y -2  ,  mtrw+2,gfx_texth*1.3 , 0);
+
+
+    
+    // Main title
+    gfx_setfont(4);
+    col(1);  gfx_a -= 0.2;   gfx_r -= 0.15;
+    gfx_x = titx = 240;
+    gfx_y = tity = 10;
+    gfx_drawstr("MotherComp");
+    titw = gfx_x - titx;
+    gfx_y += gfx_texth * 0.8;
+    gfx_setfont(2);
+    gfx_x = titx;
+    gfx_a += 0.1;
+    gfx_drawstr("v ");
+    gfx_drawstr(version);
+    gfx_drawstr("   [mrelwood]");
+    tith = gfx_y + gfx_texth - tity;
+
+
+
+    
+    
+    // Meter boxes
+
+    col(14); // gfx_a += 0.15;
+    gfx_rect(mtrinx-1, mtrtop, mtrw +4 , mtrh);
+    gfx_rect(mtrgrx-1, mtrtop, mtrw +4 , mtrh);
+    gfx_rect(mtroutx-1, mtrtop, mtrw +4 , mtrh);
+    
+
+  
+  // Character box
+  //  gfx_dest = 30;
+    
+//    gfx_set(0.5,0.3,0.25,0.8,0);
+    gfx_set(0.55,0.45,0.35,0.7,0);
+    drag == 4 ?   gfx_set(0.55,0.45,0.4,0.9,0);
+    gfx_rect(charx , chary , charw , charh );
+
+    // Light edges
+    start = 0.1;  add = 0.9;
+    gfx_gradrect(charx + charw - 5  , chary , 5 , charh   ,  
+    start+add+0.05,start+add-0.05,start+add-0.15,0.6  , -add/5,-add/5,-add/5,0.4/5); /////////////
+    gfx_gradrect(charx , chary , charw , 5  ,  
+    start+0.1,start,start-0.1,1  , 0,0,0,0 , add/5,add/5,add/5,-0.6/5);
+    // Dark edges
+    gfx_a = 1;
+    start = 0.0;  add = 0.3;
+    gfx_gradrect(charx , chary + charh -5  , charw , 5  ,  
+    start+add,start+add-0.1,start+add-0.2,0.0  ,0,0,0,0, -add/5,-add/5,-add/5,0.8/5);
+    gfx_gradrect(charx , chary  , 5 , charh   , 
+    start+0.1,start,start-0.1,0.8  ,  add/5,add/5,add/5,-0.8/5);
+
+    
+      
+  // Relative vol box
+    boxrelx = slid2x - boxrelw/2 - 1;
+  
+
+//    gfx_set(0.45,0.3,0.25,0.8,0);
+    gfx_set(0.5,0.35,0.25,0.7,0);
+//        drag == 28 ?   gfx_set(0.55,0.45,0.4,0.9,0);
+    gfx_rect(boxrelx , boxrely , boxrelw , boxrelh);
+
+    
+    // Light edges
+    tmp = 1; tmp2 = -0.9; gfx_mode = 0;
+    gfx_gradrect(boxrelx , boxrely+boxrelh - 4 , boxrelw , 4 ,  tmp+0.1,tmp,tmp-0.1, 0.5  , 
+    0,0,0,0 , tmp2/4,tmp2/4,tmp2/4, 0.5/(4));
+    gfx_gradrect(boxrelx  , boxrely , 4, boxrelh , 
+    tmp+tmp2+0.2,tmp+tmp2+0.1,tmp+tmp2-0,1  , -tmp2/4,-tmp2/4,-tmp2/4,-0.5/(4));
+    // Dark edges
+    col(16); gfx_mode = 0;
+    tmp3 = 0; tmp4 = 0.2;
+    gfx_gradrect(boxrelx , boxrely , boxrelw , 4  ,  
+    tmp3+0.1,tmp3,tmp3-0.1, 1  , 0,0,0,0 , tmp4/4,tmp4/4,tmp4/4,-0.2/(4));
+    gfx_gradrect(boxrelx+boxrelw - 5 , boxrely , 5 , boxrelh  , 
+    tmp3+tmp4+0.1,tmp3+tmp4,tmp3+tmp4-0.1, 0.4  , -tmp4/4,-tmp4/4,-tmp4/4,0.6/(4));
+      
+
+
+
+    
+    
+  // stationary BOXES    
+    // Compression box
+    gfx_setfont(2);
+    gfx_measurestr(" 100 " , boxw , 0);
+    col(15);
+    boxh = gfx_texth * 1.4;
+    box1x = 400 - boxw * 0.5;
+    box1y = 310;
+    gfx_rect(box1x,box1y, boxw,boxh);
+
+    
+    // Vol box
+    gfx_measurestr("-12.7dB ", vmaxw, box3h);
+    box3x = slid2x - vmaxw/2;
+    gfx_rect(box3x+r*2, box3y, vmaxw , boxh);
+
+    // Peak box
+    col(14);
+    pkw = mtrw - 14;
+    pkx = mtroutx + mtrw/2 - pkw/2;
+    attbrakex = atdefx - pkw/2 +1;
+    pkh = 16;
+    pky = mtrtop - 6 - pkh;
+    gfx_a += 0.2; gfx_set(0,0,0,0.6 , 0);
+    gfx_rect(pkx-1,pky-1,pkw+2,pkh+2);
+    
+    /*   
+        //Blit boxes
+        gfx_dest = 30;
+        gfx_x = gfx_y = 0; gfx_a = 1; gfx_mode = 0;
+        gfx_blit(14,1,0);
+    */
+
+
+    );
+
+
+
+((drag >= 20) && (drag <= 23)) || (gloom1 > 0) ? (
+  drag > 0 ? (
+    gloom1 += 0.3;
+    gloom1 > 1 ? gloom1 = 1;
+    ):(
+    gloom1 -= 0.15;
+    gloom1 < 0 ? gloom1 = 0;
+    );
+  
+  gloom = 0.15 * gloom1;
+  gloom > 0 ? upleft = 2;
+  );
+  
+
+
+
+
+
+
+
+// PRESET UPDATER
+/*
+drag == 0 ? (
+  upleftcnt += 1;
+  mouse_capold > 0 ? (
+    slisaving = 1;
+    upleftcnt = 70;
+    uppreset = 0;
+    );
+  ):(
+  upleftcnt = 0;
+  );
+  
+upleftcnt > 60 ? (
+  upleftcnt = 0;
+  slisaving == 0 ? (
+    slistore = 300;
+    
+    sli = 1;
+    while(sli < 40)(
+      slistore[sli] != slider(sli) ? (
+        uppreset = 1;
+        sli = 40;
+        );
+        
+      sli += 1;
+      sli == 4 ? sli = 19;
+      sli == 24 ? sli = 28;
+      sli == 30 ? sli = 39;
+      );
+    );
+  
+  uppreset > 0 ? (
+    uppreset = 0;
+    
+    leftbreak = 5;
+    upnumber = 1;
+    upslider = 5;
+    up30 = 1;
+    lefta = 0;
+    );
+  
+  
+  
+  slistore = 300;
+  sli = 1;
+  while(sli < 40)(
+    slistore[sli] = slider(sli);
+    sli += 1;
+    sli == 4 ? sli = 19;
+    sli == 24 ? sli = 28;
+    sli == 30 ? sli = 39;
+    
+    );
+  slisaving = 0;
+  
+  );
+
+
+derrr = slistore[20];
+
+der = slistore;
+der0 = der;
+der1 = der[1];
+der2 = der[2];
+der3 = der[3];
+
+*/
+
+
+
+
+
+
+
+
+
+//stooo = slistore[1];
+
+
+upleft > 0 ? (
+    upleft -= 1;
+    gfx_setimgdim(15,-1,-1);     gfx_setimgdim(15,800,400); 
+    
+//    upslider += 1;
+    
+    gfx_dest = 15;
+    gfx_set(1,1,1,1, 0);
+
+
+
+
+
+    gfx_setfont(2);
+
+    character == 0 ? (
+    // Slider Track (Character)
+        col(23); // gfx_a = 0.3;
+        gfx_rect(slidx-trkw/2 , trktop + 5 , trkw,trkbot-trktop - 10);
+
+// Character List button
+        col(31); gfx_a -= 0.05;
+        drag == 29 ? (gfx_a += 0.15; upleft += 1;);
+        gfx_rect(listx1,listy1 , listw, listh);
+        gfx_rect(listx1,listy2 , listw, listh);
+        gfx_rect(listx1,listy3 , listw, listh);
+        gfx_a -= 0.15;
+        gfx_line(listlinex,listy3+listh/2 , listlinex, stylelasty - stylescale * 0.95 + gfx_texth/2);
+        gfx_a += 0.1;
+        gfx_line(listlinex,listy1+listh/2 , listx1,listy1+listh/2);
+        gfx_line(listlinex,listy2+listh/2 , listx1,listy2+listh/2);
+        gfx_line(listlinex,listy3+listh/2 , listx1,listy3+listh/2);
+        
+        
+        
+        
+    
+        stylespacing = f(1, (trkbot-trktop-slidh)/3  );
+        style1y = trktop  + slidh /2 - gfx_texth * 0.6;
+        stylescale =  (trkbot-trktop-slidh) ;
+        stylelasty = style1y + stylescale;
+
+        col(31);
+        
+        gfx_measurestr("Transient", transw ,0);
+
+        styles == 0 ? (
+            pad = 65;
+            col(31);
+            gfx_y = stylelasty - stylescale * 0.95;
+            gfx_measurestr("Mush", mushw ,styleh);
+            styleh *= 2;
+            gfx_x = slidx - slidw/2 -pad -mushw/2;    
+  //          (drag == 30) ? (gfx_a += 0.1) : (col(31));
+  //          gfx_a += chvv100 * gloom;
+            gfx_drawstr("Mush");
+            gfx_y = stylelasty - stylescale * 0.6;
+            gfx_measurestr("Punch", punchw ,0);
+            gfx_x = slidx - slidw/2 -pad -punchw/2;
+  //          (drag == 31) ? (gfx_a += 0.1) : (col(31));
+  //          gfx_a += chvv67 * gloom;
+            gfx_drawstr("Punch");
+            gfx_y = stylelasty - stylescale * 0.33;
+  //          gfx_measurestr("Transient", transw ,0);
+            gfx_x = slidx - slidw/2 -pad -transw/2;
+  //          drag == 32 ? (gfx_a += 0.1) : col(31);
+  //          gfx_a += chvv33 * gloom;
+            gfx_drawstr("Transient");
+            gfx_y = stylelasty - stylescale * 0.1;
+            gfx_measurestr("Smooth" , softw , 0);
+            gfx_x = slidx - slidw/2 -pad -softw/2;
+  //          drag == 33 ? gfx_a += 0.1 : col(31);
+  //          gfx_a += chvv00 * gloom;
+            gfx_drawstr("Smooth");
+            );
+          
+        styles == 1 ? (
+            pad = 65;
+            gfx_measurestr("Voc/E-Gtr", vocw, 0);
+            gfx_y = stylelasty - stylescale * 0.95;
+            gfx_x = slidx - slidw/2 -pad -vocw/2 -0;
+            gfx_drawstr("Voc/E-Gtr");
+            gfx_measurestr("E-Bass", rockw, 0);
+            gfx_y = stylelasty - stylescale * 0.86;  
+            gfx_x = slidx - slidw/2 -pad -rockw/2 -0;
+            gfx_drawstr("E-Bass");
+            gfx_measurestr("Rock Mix", bassw, 0);
+            gfx_y = stylelasty - stylescale * 0.77;
+            gfx_x = slidx - slidw/2 -pad -bassw/2 -0;
+            gfx_drawstr("Rock Mix");
+            gfx_measurestr("Ac Gtr", acw, 0);
+            gfx_y = stylelasty - stylescale * 0.69;
+            gfx_x = slidx - slidw/2 -pad -acw/2 -0;
+            gfx_drawstr("Ac Gtr");
+            gfx_measurestr("Drums", drsw, 0);
+            gfx_y = stylelasty - stylescale * 0.5;
+            gfx_x = slidx - slidw/2 -pad -drsw/2 -0;
+            gfx_drawstr("Drums");
+            gfx_measurestr("Piano", pnow, 0);
+            gfx_y = stylelasty - stylescale * 0.35;
+            gfx_x = slidx - slidw/2 -pad -pnow/2 -0;
+            gfx_drawstr("Piano");
+            gfx_measurestr("Folk Mix", folkw, 0);
+            gfx_y = stylelasty - stylescale * 0.2;
+            gfx_x = slidx - slidw/2 -pad -folkw/2 -0;
+            gfx_drawstr("Folk Mix");
+            gfx_measurestr("Classical", clasw, 0);
+            gfx_y = stylelasty - stylescale * 0;
+            gfx_x = slidx - slidw/2 -pad -clasw/2 -0;
+            gfx_drawstr("Classical");
+            
+            );
+
+        ):(
+        
+        // Knob Tracks
+        col(23);
+        gfx_rect(knbx+0 , knb1y+10 , knbt+knbw,knbth);
+        gfx_rect(knbx+0 , knb2y+10 , knbt+knbw,knbth);
+        gfx_rect(knbx+0 , knb3y+10 , knbt+knbw,knbth);
+        gfx_rect(knbx+0 , knb4y+10 , knbt+knbw,knbth);
+
+        col(31);// gfx_a += 0.2; gfx_r -= 0.2;
+        
+        gfx_setfont(2);
+        a = gfx_a;
+//        gloom = 0.15;
+        
+        (drag > 0) && (drag = dragold) ? (gloomthe = dragold);
+        
+        gfx_x = knbx;
+        gfx_y = knb1y - gfx_texth;
+        (drag == 20) || (gloomthe == 20) ? (gfx_a += gloom) : (gfx_a = a);
+        gfx_drawstr("Attack");
+        gfx_x = knbx;    
+        gfx_y = knb2y - gfx_texth;
+        (drag == 21)  || (gloomthe == 21) ? (gfx_a += gloom) : (gfx_a = a);
+        gfx_drawstr("Release");
+        gfx_x = knbx;    
+        gfx_y = knb3y - gfx_texth;
+        (drag == 22)  || (gloomthe == 22) ? (gfx_a += gloom) : (gfx_a = a);
+        gfx_drawstr("Ratio");
+        gfx_x = knbx;    
+        gfx_y = knb4y - gfx_texth;
+        (drag == 23)  || (gloomthe == 23) ? (gfx_a += gloom) : (gfx_a = a);
+        gfx_drawstr("Density");
+        );
+
+
+    gfx_setfont(1);
+    col(32);
+    gfx_r -= 0.05;
+    gfx_a = switcha * 1;
+    gfx_y = chary +2;
+    character == 0 ? (
+        gfx_x = slidx - charstrw/2;
+        gfx_drawstr(charstr);
+        ):(
+        precstr = "Precise";
+        gfx_measurestr(precstr, precstrw, 0);
+        gfx_x = slidx - precstrw/2;
+        gfx_drawstr(precstr);
+        );
+    
+    up30 = 1;
+    );
+
+
+
+
+
+
+
+
+
+
+
+// KNOB
+(drawknob > 0) ? (
+
+    drawknob -= 1;
+    gfx_dest = 1;
+    gfx_setimgdim(1, -1, -1);   gfx_setimgdim(1, 800,400); 
+    gfx_setimgdim(2, -1, -1);   gfx_setimgdim(2, 800,400); 
+    gfx_setimgdim(3, -1, -1);   gfx_setimgdim(3, 800,400);
+    
+    gfx_x = gfx_y = 0;
+    
+    eco > 0 ? (
+      
+      grey = -0.15;
+      g = 0.4;
+      knobrad = 100;
+      x = 1;
+      y = 1;
+      while(grey < 0.6)(
+        gfx_set(grey*1.1,grey*1.04,grey , 1,0);
+        gfx_circle(400,200,knobrad , 1,1);
+        grey += g;
+        g > 0.05 ? g /= 2;
+        knobrad -= x;
+        x += y;
+        y += 1;
+        );    
+      
+    
+      // Knob line  
+      gfx_dest = 2;
+      gfx_set(0.4,0.4,0.4,1 ,0);
+      linew = 10;
+      lineh = 45;
+      liney2 = 292;
+      gfx_rect(395,liney2 - lineh , linew,lineh * 0.85);
+      
+  
+      ):(
+      col(11);
+      gfx_circle(400,200,100 , 1,1);
+  
+      gfx_mode = 1;
+  
+      start = -0.2;
+      end = 0.4;
+      starta = -0.1;
+      enda = 1;
+      endy = 0.1;
+      enday = -0.3;
+      gfx_gradrect(290,90,110,220 , start-0.0,start,start,starta, (end+0.0)/110,end/110,end/110,enda/110 ,
+      endy/110,endy/110,endy/110,enday/110);
+      gfx_gradrect(400,90,110,220 , -start,-start,-start,starta+enda, -end/110,-end/110,(-end-0.1)/110,-enda/110 ,
+      endy/110,endy/110,endy/110,enday/110);
+      start = 0.8;
+      end = -0.7;
+      starta = -0.6;
+      enda = -starta;
+      gfx_gradrect(290,90,220,130 , start,start,start,starta, 0,0,0,0, end/130,end/130,end/130,enda/130);
+  
+  
+      // Knob line  
+      gfx_dest = 2;
+      gfx_set(0.2,0.2,0.2,0.7 ,0);
+      linew = 10;
+      lineh = 45;
+      liney2 = 292;
+      gfx_gradrect(395,liney2 - lineh , linew,lineh , 0.2,0.2,0.2,0.65  ,  0,0,0,0.1/linew,  -0.1/lineh,-0.1/lineh,-0.1/lineh,0.15/lineh);
+  
+      // Combine knob & line
+      gfx_dest = 3;
+      gfx_mode = 0;
+      gfx_a = 1;
+      gfx_x = gfx_y = 0;
+      gfx_blit(1,1, 0.63);
+      gfx_blit(2,1, 0.63);
+      );
+    
+    );
+
+
+
+
+
+(character == 0) ? (
+  (drag == 2) || (stylightgo == 1) ? (
+    gfx_dest = 15;
+    (drag == 2) ? (
+      upleft = 1;
+      styldie = 0;
+      stylightcnt = 0;
+      stylightgo = 1;
+      );
+    styldie == 0 ? (
+      styla += 0.4 ;
+      styla > 1 ? (styla = 1);
+      );
+    stylightx = 35;
+    stylightw =  slidx-slidw/2-stylightx;
+    stylighth = 16;
+    stylighty = (slidmy1+slidmy2)/2-10;
+    gfx_set(1,1,1, 0.2* styla ,1);
+    gfx_rect(stylightx,stylighty,stylightw,stylighth);
+    gfx_gradrect(stylightx,stylighty-stylighth,stylightw,stylighth , 1,1,1, 0  ,  0,0,0,0,  0,0,0,(0.2*styla)/stylighth);
+    gfx_gradrect(stylightx,stylighty+stylighth,stylightw,stylighth , 1,1,1, 0.2 *styla  ,  0,0,0,0,  0,0,0,(-0.2*styla)/stylighth);
+  
+    stylightgo == 1 ? (
+      upleft = 1;
+      stylightcnt += 1;
+      stylightcnt > 10 ? (
+        styldie = 1;
+        styla -= 0.05;
+        styla <= 0 ? (
+          stylightcnt = 0;
+          stylightgo = 0;
+          styldie = 0;
+          );
+        );
+      );      
+    );
+  ):(
+  drag == 4 ? (
+    styla = 0;
+    stylightcnt = 0;
+    stylightgo = 0;
+    styldie = 0;
+    );
+  );
+
+
+      
+      
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+    
+
+
+
+
+
+
+//leftbreak > 0 ? upslider = 5;
+
+    // BLIT SLIDERS
+//upslider = 1;
+upslider > 0 ? (
+    upslider -= 1;
+//    upblit = 1;
+    up30 = 1;
+    
+    gfx_dest = 18;
+    gfx_setimgdim(18, -1, -1);  gfx_setimgdim(18, paw-100, 400); // ?
+    
+    gfx_set(1,1,1,1,0);
+    gfx_x = gfx_y = 0;
+//    gfx_a = lefta;
+    
+    character == 0 ? (
+        slidmy1 = (trkbot-slidh) - slider2  * (trkbot-trktop-slidh);
+        slidmy2 = slidmy1 + slidh;
+        eco > 0 ? (
+            gfx_blit(19,1,0 , 100,5,slidecow,slidh , slidx-slidw/2,trkbot - slidh - slider2 * (trkbot-trktop-slidh),slidecow,slidh);
+        
+            ):(
+            
+            gfx_blit(19,1,0 , 5,5,slidw,slidh , slidx-slidw/2,trkbot - slidh - slider2 * (trkbot-trktop-slidh),slidw,slidh);
+            );
+        ):(
+        eco > 0 ? (
+            // Blit Small Detail slider eco knobs
+            gfx_blit(19,1,0 , 700,5,knbw,knbh , knbx + slider20*knbt,knb1y,knbw,knbh);
+            gfx_blit(19,1,0 , 700,5,knbw,knbh , knbx + slider21*knbt,knb2y,knbw,knbh);
+            gfx_blit(19,1,0 , 700,5,knbw,knbh , knbx + slider22*knbt,knb3y,knbw,knbh);
+            gfx_blit(19,1,0 , 700,5,knbw,knbh , knbx + slider23*knbt,knb4y,knbw,knbh);
+            
+            ):(
+            gfx_a -= 0.1; gfx_a < 0 ? gfx_a = 0;
+            gfx_blit(19,1,0 , 600,5,knbw,knbh , knbx + slider20*knbt,knb1y,knbw,knbh);
+            gfx_blit(19,1,0 , 600,5,knbw,knbh , knbx + slider21*knbt,knb2y,knbw,knbh);
+            gfx_blit(19,1,0 , 600,5,knbw,knbh , knbx + slider22*knbt,knb3y,knbw,knbh);
+            gfx_blit(19,1,0 , 600,5,knbw,knbh , knbx + slider23*knbt,knb4y,knbw,knbh);
+            );
+        );
+//        );
+
+
+    // Blit vol slider
+    gfx_a = 1;
+    slid2my1_ = (trkvolbot-slid2h) - (slider3/24 +0.5)  * (trkvolbot-trkvoltop-slid2h);
+    slid2my1 = max(trkvoltop , min(slid2my1_ , trkvolbot-slid2h) );
+    slid2my2 = slid2my1 + slid2h;
+    voltravel = (trkvolbot-trkvoltop-slid2h);
+    volmode == 0 ? (
+        eco > 0 ? (
+            gfx_blit(19,1,0 , 400,5,100,100 , slid2x-slid2w/2, trkvolbot - slidh - max(0, min(1,slider3/24 +0.5))  * voltravel  ,100,100);
+            ):(
+            gfx_blit(19,1,0 , 200,5,100,100 , slid2x-slid2w/2, trkvolbot - slidh - max(0, min(1,slider3/24 +0.5))  * voltravel  ,100,100);
+            );
+        ):(
+        eco > 0 ? (
+            gfx_blit(19,1,0 , 500,5,100,100 , slid2x-slid2w/2, trkvolbot - slidh - max(0, min(1,slider3/24 +0.5))  * voltravel  ,100,100);
+            ):(
+            gfx_blit(19,1,0 , 300,5,100,100 , slid2x-slid2w/2, trkvolbot - slidh - max(0, min(1,slider3/24 +0.5))  * voltravel  ,100,100);
+            );
+        );
+
+    ); // END BLIT SLIDERS
+
+
+
+    
+leftbreak > 0 ? (
+  leftbreak -= 1;
+  upnumber = 1;
+  );
+
+
+//upall > 0 ? (
+//  upall -= 1;
+
+//upnumber = 0;
+  // NUMBERS
+(upnumber > 0) || (lefta < 1) ? (
+  lefta = max(0, 1-max(0, leftbreak-1)/2.5) ;
+  gfx_dest = 14;
+  gfx_setimgdim(14,-1,-1);     gfx_setimgdim(14,paw-100,400); 
+  upnumber -= 1;
+  up30 = 1;
+
+    
+  //Character number box
+  character == 0 ? (
+      col(25); //gfx_mode = 0;  gfx_a += 0.45;
+      gfx_a *= lefta;
+      
+      box2x = slidx+slidw/2 + 4;
+      box2y = slidmy1 + slidh * 0.5 - boxh * 0.5 + max(0, slider2 *2 -1) * 35;
+      gfx_rect(box2x, box2y, boxw , boxh);
+      );
+  
+  // Compression number
+  gfx_setfont(2);
+  col(4); 
+  
+  gfx_x = box1x + boxw /2;
+  gfx_y = box1y + boxh /2 - gfx_texth * 0.5;
+  txt1n = slider1*100;
+  sprintf(txt1, "%d", txt1n);
+  gfx_measurestr(txt1, txt1w, 0);
+  gfx_x -= txt1w/2;
+  gfx_drawnumber(slider1*100 , 0);
+  
+  
+
+// NUMBERS
+// Volume number:
+  col(4);
+  dbstr = " dB";
+  gfx_measurestr(dbstr, dbstrw, 0);
+  gfx_x = paw-100 - dbstrw - 5;
+  gfx_y = box3y + gfx_texth * 0.1;
+  gfx_drawstr(dbstr);
+  volstr_ = slider3;
+  sprintf(volstr, "%.1f" , volstr_);
+  gfx_measurestr(volstr, volstrw, 0);
+  gfx_x = paw-100 - dbstrw - volstrw - 5;
+  gfx_drawstr(volstr);
+  
+  
+  
+  //Precise numbers & text:
+  character == 0 ? (
+    gfx_x = box2x + boxw /2;  
+    gfx_y = box2y + boxh /2 - gfx_texth * 0.5;
+    txt2n = slider2*100;
+    sprintf(txt2, "%d", txt2n);
+    gfx_measurestr(txt2, txt2w, 0);
+    gfx_x -= txt2w/2;
+    //gfx_y += max(0, slider2 *2 -1) * 35;
+    gfx_a *= lefta;
+    gfx_drawnumber(slider2*100 +0.001 , 0);
+    ):(
+    
+    col(4);  gfx_a *= lefta;
+    gfx_y = knb1y - gfx_texth;
+    gfx_x = knbx + knbt * 0.55;
+    slider9 < 5 ? (gfx_drawnumber(slider9 +0.01 , 1) ) : (gfx_drawnumber(slider9 +0.01 , 0) );
+    col(0);  gfx_a *= lefta;
+    gfx_drawstr(" ms");
+    col(4);   gfx_a *= lefta;
+    gfx_y = knb2y - gfx_texth;
+    gfx_x = knbx + knbt * 0.55;
+    gfx_drawnumber(slider10 + 0.01 , 0);
+    col(0);  gfx_a *= lefta;
+    gfx_drawstr(" ms");
+    col(4);   gfx_a *= lefta;
+    gfx_y = knb3y - gfx_texth;
+    gfx_x = knbx + knbt * 0.55;
+    gfx_drawnumber(slider5 + 0.01 , 1);
+    col(0);  gfx_a *= lefta;
+    gfx_drawstr(" :1");
+    col(4);   gfx_a *= lefta;
+    gfx_y = knb4y - gfx_texth;
+    gfx_x = knbx + knbt * 0.55;
+//    gfx_drawnumber(max(0,100.2-slider18) * ( (devv^3+0.0001)/(devv+0.0001) ) , 0);
+    gfx_drawnumber(slider23*100 , 0);
+    col(0);  gfx_a *= lefta;
+    gfx_drawstr(" %");
+    col(4); 
+    );
+  );
+
+
+
+
+
+
+
+
+
+//upedit = 1;
+// Edit buttons2
+(upedit > 0) || (unsave == 1) ? (
+    upedit -= 1;
+    
+// Light fades for save
+    character == 1 ? (
+        (slider26 == 0) && (unsave == 0) ? (
+            light == 1 ? (
+                gfx_dest = 31;
+                upedit += 1;
+            
+                blinkiewait += 1;
+                blinkiewait >= 7 ? (
+                    blinkieup == 0 ? (
+                        blinkie -= 0.5;
+                        blinkie <= 0 ? (
+                            offset = 1; // test
+                            
+                            blinkie = 0;
+                            blinkieup = 1;
+                            blinkiecnt += 1;
+                            );
+                        ):(
+                        blinkie += 0.5;
+                        blinkie >= 1 ? (
+                            blinkie = 1;
+                            blinkieup = 0;
+                            );
+                        );
+                    ):(
+                    offset = 0;
+                    );
+                blinkiecnt >= 4 ? (
+                    slider25 = 1;
+                    light = 0;
+                    store = 1;
+                    offset = 1;
+                    upcomp = 1;
+                    );
+                
+                ):(
+                blinkie = 1;
+                blinkieup = 0;
+                blinkiecnt = 0;
+                blinkiewait = 0;
+                
+                
+                );
+
+
+    // EDIT BOX WAKE & DIM
+
+            (offset == 0) && (unsave == 0) ? (
+                slider25 == 0 ? (
+                    ((drag >= 20) && (drag <= 23)) || (dblclk20 > 0) || (showingedit > 0 ) ? (
+    //                    dblclk20 = 0;
+                        (slider9 != progatt) ||
+                        (slider10 != progrel) ||
+                        (slider5 != prograt) ||
+                        (slider18 != progden) ? (
+                            showedita < 1 ? (
+                                showedita += 0.1;  showedita > 1 ? showedita = 1;
+                                showingedit = upedit = 1;
+                                up31 = 1;
+                                ):(
+                                showedita = 1;
+                                dblclk20 = 0;
+                                showingedit = 0;
+                                );
+                            ):(
+                            showedita > 0 ? (
+                                showedita -= 0.05;
+                                showingedit = upedit = 1;
+                                up31 = 1;
+                                ):(
+                                showedita = 0;
+                                dblclk20 = 0;
+                                showingedit = 0;
+                                );
+                            );
+                        );
+                    );
+                );
+            );
+
+        );
+// RESET Offset
+    //                dblclk20 = 0;
+    (slider26 == 1) || (slider27 == 1) || (unsave == 1) ? (
+    
+        showedita > 0 ? (
+            upedit += 1;
+            unsave = 1;
+            unsavewait += 1;
+            unsavewait > 6 ? (
+                showedita -= 0.15;
+                showedita < 1 ? (
+                    reset = 1;
+                    upslider = 1;
+                    upcomp = 1;
+                    up31 = 1;
+                    );
+        //                    showingedit = upedit = 1;
+                );
+            ):(
+            showedita = 0;
+            slider26 = 0;
+            unsave = 0;
+            unsavewait = 0;
+            );
+        );
+
+    slider35 = showedita;
+    );
+
+
+//åå
+    
+
+
+
+
+    // BLITS
+up30 > 0 ? (
+    up30 -= 1;
+    gfx_dest = 30;
+    gfx_setimgdim(30, -1, -1);  gfx_setimgdim(30, paw-50, 450); 
+    col(10);
+    
+    gfx_x = gfx_y = 0; 
+    gfx_blit(10,1,0); // Wood
+    
+
+//    upslider = 1;
+//    upnumber = 1;
+    gfx_a = lefta;
+    gfx_blit(15,1,0); // Left
+
+    // Knob base circle
+//    gfx_set(0.04,0.0,0.0,1 ,0);
+//    gfx_circle(400,200,100 , 1,1);
+    grey = 0.45;
+    gfx_set(grey,grey,grey,1 ,0);
+    gfx_circle(400,200,101,1);
+
+    gfx_set(1,1,1,1,0);
+    gfx_circle(400,200,99,1);
+    gfx_set(1,1,1,-1,1);
+    gfx_circle(400,200,99,1);
+
+
+
+//    slider28 == 1 ? gfx_a += 0.3;
+    slider28 == 0 ? (
+        col(16);  gfx_a += 0.0; gfx_r -= 0.1;
+//        gfx_rect(boxrelx +3 , boxrely +4 , boxrelw -7, boxrelh -6);
+        gfx_rect(boxrelx +2 , boxrely +2 , boxrelw -4 , boxrelh -4 );
+        );
+
+    gfx_x = boxrelx;
+    gfx_y = boxrely +2;
+    slider28 == 0 ? (
+        col(3); gfx_a -= 0.2; gfx_r -= 0.1;
+        ):(
+  //      col(1); gfx_a -= 0.1;
+        col(31); gfx_a -= 0.2;
+        );
+    gfx_setfont(2);
+    gfx_drawstr(" Relative");
+    
+//    (drag == 28) ? (
+//      col(16); // gfx_a += 0.05; gfx_r -= 0.1;
+//      gfx_rect(boxrelx +3 , boxrely +4 , boxrelw -7, boxrelh -6);
+//      gfx_rect(boxrelx  , boxrely  , boxrelw , boxrelh );
+//      );
+    
+    
+    up31 = 1;
+    );
+
+
+
+/*
+up31cnt += 1;
+up31cnt > 60 ? (
+  up31 += 1;
+  up31cnt = 0;
+  );
+*/
+
+//up31=0;
+up31 > 0 ? (
+  up31 -= 1;
+
+
+
+
+
+  gfx_dest = 31;
+  gfx_setimgdim(31, -1, -1);  gfx_setimgdim(31, paw-50, 450); 
+  gfx_x = gfx_y = 0;
+
+  gfx_set(0.1,0,0,1,0);
+  gfx_rect(0,0,paw-50,450);
+
+  // BLIT KNOB
+  gfx_set(1,1,1,0.7,0);
+//      col(20); // gfx_a -= 0.1;
+  gfx_blit(3,1, 0.0 + 5 * slider1 );
+
+  
+  col(10); 
+  gfx_blit(30,1,0); // solids
+  grey = 0.4;
+  gfx_set(grey,grey,grey,1 ,0);
+  gfx_circle(400,200,101,0,1);
+  gfx_circle(400,200,100,0,1);
+  gfx_circle(400,200,99,0,1);
+
+  (showedita > 0)  ? (
+    col(10);
+    showedita < 1 ? up31 += 1;
+    gfx_a = showedita;
+    slider19 == 1 ? (
+        offset == 1 ? (
+            gfx_blit(26,1,0);
+            ):(
+            gfx_blit(16,1,0);
+            );
+        ):(
+        
+        offset == 1 ? (gfx_a = 0.95; gfx_blit(17,1,0););
+        );
+    );
+
+  col(10); 
+  gfx_blit(18,1,0); // sliders
+  gfx_blit(14,1,0); // numbers & boxes
+  
+  // Blit Atdef slider
+//  gfx_set(1,1,1,showdefa,0);
+  gfx_set(1,1,1,1,0);
+  gfx_blit(19,1,0 , 300,5,slid2w,slid2h , atdefx1+1,(mtrbot-atdefh) - slider39* (mtrbot-mtrtop-atdefh) , atdefw,atdefh);
+  
+
+  // Attack Brake Led box
+  gfx_set(0,0,0,0.6,0);
+  gfx_rect(attbrakex-1,pkatty-1,pkw+2,pkatth+2);
+  
+//  uplines > 0 ? (
+//    uplines = 0;
+//    gfx_dest = 31;
+    gfx_blit(13,1,0);
+//    );
+  
+  
+  light == 1 ? (
+    col(16);
+    gfx_a *= blinkie;
+    edge_e = 2;
+    gfx_rect(offx+edge_e, offy+edge_e,offw-edge_e*2,(offh *2)-edge_e*2);
+    up31 = 1;
+    );
+  
+  
+//  (scalenr > 0) && (scalenr != 1) ? (
+  (scalenr > 0) ? (
+    gfx_setfont(2);
+    gfx_x = paw-120;
+    gfx_y = 415;
+    col(6); gfx_a = 0.8;
+    gfx_drawnumber(scalenr ,1);
+    gfx_drawstr("x");
+    );
+  
+  
+//  uplines = 1;
+  );
+
+
+/*
+// Blit edit buttons
+showedita > 0 ? (
+    gfx_dest = 30;
+    gfx_x = gfx_y = 0;
+    character == 1 ? (
+        gfx_set(1,1,1, 1 * showedita);
+        gfx_blit(16,1,0);
+        ):(
+        offset == 1 ? (
+            gfx_set(1,1,1, 1 * showedita);
+            gfx_blit(17,1,0);
+            );
+        );
+    up31 = 1;
+    );
+*/
+
+
+
+
+// Button brightness when clicked:
+drag == 4 ? (
+  gfx_dest = 31;
+  col(96);
+  col(16); gfx_r -= 0.2; gfx_a += 0.1;
+  gfx_rect(charx +2, chary +2, charw -4, charh -4);
+  up31 = 1;
+  );
+drag == 28 ? (
+  gfx_dest = 31;
+  col(16); //gfx_a = 0.2;
+  gfx_rect(boxrelx +2, boxrely +2, boxrelw -4, boxrelh -4);
+  up31 = 1;
+  );
+
+(character == 1) && (showedita > 0) ? (
+  drag == 25 ? (
+    gfx_dest = 31;
+    col(16); //gfx_a = 0.2;
+    gfx_rect(offx+edge_e, offy+edge_e,offw-edge_e*2,(offh *2)-edge_e*2);
+    up31 = 1;
+    );
+  (drag == 26) || (unsave == 1) ? (
+    gfx_dest = 31;
+    col(16); //gfx_a = 0.2;
+    unsave == 1 ? gfx_a *= showedita;
+    gfx_rect(resx+edge_e, resy+edge_e,resw-edge_e*2,(offh*2)-edge_e*2);
+    up31 = 1;
+    );
+  ):(
+  (drag == 27)  || (unsave == 1) ? (
+    gfx_dest = 31;
+    col(16); //gfx_a = 0.2;
+    unsave == 1 ? gfx_a *= showedita;
+    gfx_rect(actx, acty,actw,acth);
+    up31 = 1;
+    );
+  );
+
+
+
+
+
+
+// METERS
+
+(drag == 39) || (upgr > 0) ? (
+  upgr -= 1;
+  atdefr = f(.01 , 0.5*(pkbrake*2.5 -1) );
+//  atdefg = f(.01 , 0.2+0.15*(1-pkbrake) );
+  atdefg = f(.01 , 0.2+0.15*(1-pkbrake) );
+  atdefb = f(.01 , 0.1 + 0.5 * (pkbrake*(1-pkbrake)*4)^1.5 );
+  
+  grpkr = f(.01 , atdefr^0.5);
+  grpkg = f(.01 , atdefg^0.5);
+  grpkb = f(.01 , atdefb^0.5);
+  
+  );
+
+
+
+(offline < 1) || (showdef > 0) ? (
+//  showdef > 0 ? uplines = 1;
+  
+  gfx_dest = 32;
+  
+  
+  
+  // INPUT METERS
+  (meter_l_pk >= mtrinL) ? (mtrinL = meter_l_pk) : (mtrinL -= (mtrinL-meter_l_pk)/mtrdc );
+  (meter_r_pk >= mtrinR) ? (mtrinR = meter_r_pk) : (mtrinR -= (mtrinR-meter_r_pk)/mtrdc );
+  (meter_mid_pk >= mtrinM) ? (mtrinM = meter_mid_pk) : (mtrinM -= (mtrinM-meter_mid_pk)/mtrdc );
+  
+  mtrinL > 1 ? mtrinL = 1;    mtrinL < 0 ? mtrinL = 0;
+  mtrinR > 1 ? mtrinR = 1;    mtrinR < 0 ? mtrinR = 0;
+  mtrinM > 1 ? mtrinM = 1;    mtrinM < 0 ? mtrinM = 0;
+  
+  mtrinL >= mtrinLpk ? (
+      mtrinLpk = mtrinL;
+      mtrinLpkcnt = 0;
+      ):(
+      mtrinLpkcnt += 1;
+      mtrinLpkcnt > mtrpkhold ? (
+          mtrinLpk -= (mtrinLpk-mtrinL)/mtrdc;
+          );
+      );
+  
+  mtrinR >= mtrinRpk ? (
+      mtrinRpk = mtrinR;
+      mtrinRpkcnt = 0;
+      ):(
+      mtrinRpkcnt += 1;
+      mtrinRpkcnt > mtrpkhold ? (
+          mtrinRpk -= (mtrinRpk-mtrinR)/mtrdc;
+          );
+      );
+  
+  mtrinM >= mtrinMpk ? (
+      mtrinMpk = mtrinM;
+      mtrinMpkcnt = 0;
+      ):(
+      mtrinMpkcnt += 1;
+      mtrinMpkcnt > mtrpkhold ? (
+          mtrinMpk -= (mtrinMpk-mtrinM)/mtrdc;
+          );
+      );
+  
+  
+  
+  mtrinLy = f(1, mtrbot - mtrh * mtrinL^mtrexp );
+  mtrinRy = f(1, mtrbot - mtrh * mtrinR^mtrexp );
+  mtrinMy = f(1, mtrbot - mtrh * mtrinM^mtrexp );
+  
+  mtrinLpky = f(1, mtrbot - mtrh * mtrinLpk^mtrexp );
+  mtrinRpky = f(1, mtrbot - mtrh * mtrinRpk^mtrexp );
+  mtrinMpky = f(1, mtrbot - mtrh * mtrinMpk^mtrexp );
+  
+  meter_l_pk = meter_l_run;
+  meter_r_pk = meter_r_run;
+  meter_mid_pk = meter_mid_run;
+  
+  gfx_setimgdim(32, -1, -1);  gfx_setimgdim(32, 850, 450); 
+  
+  
+  col(6);
+  gfx_rect(mtrinx+mtrpad , mtrinLy, mtrwper , mtrbot - mtrinLy);
+  gfx_rect(mtrinx+mtrpad+mtrwper*2 , mtrinRy, mtrwper , mtrbot - mtrinRy);
+  col(7);
+  gfx_rect(mtrinx+mtrpad+mtrwper , mtrinMy, mtrwper , mtrbot - mtrinMy);
+  
+  col(8);
+  gfx_line(mtrinx+mtrpad , mtrinLpky, mtrinx+mtrpad+mtrwper-1 , mtrinLpky);
+  gfx_line(mtrinx+mtrpad+mtrwper*2 , mtrinRpky, mtrinx+mtrpad+mtrwper*3-1 , mtrinRpky);
+  gfx_line(mtrinx+mtrpad+mtrwper , mtrinMpky, mtrinx+mtrpad+mtrwper*2-1 , mtrinMpky);
+  
+  
+  
+  
+  
+  
+  
+  
+  // OUTPUT METERS
+  (metero_l_pk >= mtroutL) ? (mtroutL = metero_l_pk) : (mtroutL -= (mtroutL-metero_l_pk)/mtrdc );
+  (metero_r_pk >= mtroutR) ? (mtroutR = metero_r_pk) : (mtroutR -= (mtroutR-metero_r_pk)/mtrdc );
+  (metero_mid_pk >= mtroutM) ? (mtroutM = metero_mid_pk) : (mtroutM -= (mtroutM-metero_mid_pk)/mtrdc );
+  
+  
+  mtroutL > 1 ? mtroutL = 1;    mtroutL < 0 ? mtroutL = 0;
+  mtroutR > 1 ? mtroutR = 1;    mtroutR < 0 ? mtroutR = 0;
+  mtroutM > 1 ? mtroutM = 1;    mtroutM < 0 ? mtroutM = 0;
+  
+  mtroutL >= mtroutLpk ? (
+      mtroutLpk = mtroutL;
+      mtroutLpkcnt = 0;
+      ):(
+      mtroutLpkcnt += 1;
+      mtroutLpkcnt > mtrpkhold ? (
+          mtroutLpk -= (mtroutLpk-mtroutL)/mtrdc;
+          );
+      );
+  
+  mtroutR >= mtroutRpk ? (
+      mtroutRpk = mtroutR;
+      mtroutRpkcnt = 0;
+      ):(
+      mtroutRpkcnt += 1;
+      mtroutRpkcnt > mtrpkhold ? (
+          mtroutRpk -= (mtroutRpk-mtroutR)/mtrdc;
+          );
+      );
+  
+  mtroutM >= mtroutMpk ? (
+      mtroutMpk = mtroutM;
+      mtroutMpkcnt = 0;
+      ):(
+      mtroutMpkcnt += 1;
+      mtroutMpkcnt > mtrpkhold ? (
+          mtroutMpk -= (mtroutMpk-mtroutM)/mtrdc;
+          );
+      );
+  
+  
+  
+  mtroutLy = f(1, mtrbot - mtrh * mtroutL^mtrexp );
+  mtroutRy = f(1, mtrbot - mtrh * mtroutR^mtrexp );
+  mtroutMy = f(1, mtrbot - mtrh * mtroutM^mtrexp );
+  
+  mtroutLpky = f(1, mtrbot - mtrh * mtroutLpk^mtrexp );
+  mtroutRpky = f(1, mtrbot - mtrh * mtroutRpk^mtrexp );
+  mtroutMpky = f(1, mtrbot - mtrh * mtroutMpk^mtrexp );
+  
+  
+  
+  
+  metero_l_pk = metero_l_run;
+  metero_r_pk = metero_r_run;
+  metero_mid_pk = metero_mid_run;
+  
+  col(6);
+  gfx_rect(mtroutx+mtrpad , mtroutLy, mtrwper , mtrbot - mtroutLy);
+  gfx_rect(mtroutx+mtrpad+mtrwper*2 , mtroutRy, mtrwper , mtrbot - mtroutRy);
+  col(7);
+  gfx_rect(mtroutx+mtrpad+mtrwper , mtroutMy, mtrwper , mtrbot - mtroutMy);
+  
+  col(8);
+  gfx_line(mtroutx+mtrpad , mtroutLpky, mtroutx+mtrpad+mtrwper-1 , mtroutLpky);
+  gfx_line(mtroutx+mtrpad+mtrwper*2 , mtroutRpky, mtroutx+mtrpad+mtrwper*3-1 , mtroutRpky);
+  gfx_line(mtroutx+mtrpad+mtrwper , mtroutMpky, mtroutx+mtrpad+mtrwper*2-1 , mtroutMpky);
+  
+  
+  // GR METERS
+  
+  mtrgr1pk <= 0 ? mtrgr1pk = 1;
+  mtrgr2pk <= 0 ? mtrgr2pk = 1;
+  meter_grv1_pk <= mtrgr1 ? mtrgr1 = meter_grv1_pk : mtrgr1 += (meter_grv1_pk-mtrgr1)/grdc;
+  meter_grv2_pk <= mtrgr2 ? mtrgr2 = meter_grv2_pk : mtrgr2 += (meter_grv2_pk-mtrgr2)/grdc;
+  mtrgr1 <= 0 ? mtrgr1 = 1;
+  mtrgr2 <= 0 ? mtrgr2 = 1;
+  mtrgr1 > 1 ? mtrgr1 = 1;
+  mtrgr2 > 1 ? mtrgr2 = 1;
+
+  
+  mtrgr1 <= mtrgr1pk ? (
+      mtrgr1pk = mtrgr1;
+      mtrgr1pkcnt = 0;
+      ):(
+      mtrgr1pkcnt += 1;
+      mtrgr1pkcnt > mtrpkhold ? mtrgr1pk *= mtrpkdecay;
+      );
+  mtrgr2 <= mtrgr2pk ? (
+      mtrgr2pk = mtrgr2;
+      mtrgr2pkcnt = 0;
+      ):(
+      mtrgr2pkcnt += 1;
+      mtrgr2pkcnt > mtrpkhold ? mtrgr2pk *= mtrpkdecay;
+      );
+  
+  (mtrgr1 == 0) || (mtrgr1pk == 0) ||  (mtrgr2 == 0) || (mtrgr2pk == 0) ? (
+    offline = 1;
+    mtrgr1 = mtrgr1pk = mtrgr2 = mtrgr2pk = 1;
+    );
+  
+  
+  mtrgr1pk > 1 ? mtrgr1pk = 1;
+  mtrgr2pk > 1 ? mtrgr2pk = 1;
+      
+  
+  mtrgr1y = f(1, mtrbot - mtrgr1^mtrexp * mtrh );
+  mtrgr2y = f(1, mtrbot - mtrgr2^mtrexp * mtrh );
+  mtrgr1pky = f(1, mtrbot - mtrgr1pk^mtrexp * mtrh );
+  mtrgr2pky = f(1, mtrbot - mtrgr2pk^mtrexp * mtrh );
+  
+  meter_grv1_pk = meter_grv1_run;
+  meter_grv2_pk = meter_grv2_run;
+  
+
+
+  gfx_set( atdefr,atdefg,atdefb,  0.85 , 0) ;
+  
+  gfx_rect(mtrgrx+mtrpad,mtrtop+1, mtrwper , mtrgr2y-mtrtop);
+  gfx_rect(mtrgrx+mtrpad+mtrwper*2 , mtrtop+1, mtrwper , mtrgr2y-mtrtop);
+  gfx_a *= 0.9;
+  gfx_rect(mtrgrx+mtrpad+mtrwper , mtrtop+1, mtrwper , mtrgr1y-mtrtop);
+  
+  gfx_set(grpkr,grpkg,grpkb,gfx_a+0.3);
+  gfx_line(mtrgrx+mtrpad , mtrgr2pky, mtrgrx+mtrpad+mtrwper-1 , mtrgr2pky);
+  gfx_line(mtrgrx+mtrpad+mtrwper*2 , mtrgr2pky, mtrgrx+mtrw-mtrpad-1 , mtrgr2pky);
+  gfx_line(mtrgrx+mtrpad+mtrwper , mtrgr1pky, mtrgrx+mtrpad+mtrwper*2-1 , mtrgr1pky);
+
+
+  );
+
+/*
+uplines > 0 ? (
+  uplines = 0;
+  gfx_dest = 31;
+  gfx_blit(13,1,0);
+  );
+*/
+
+/*
+// PEAK LED
+gfx_dest = 31;
+peak > 0 ? (
+    peaka = 1;
+    peak >= peakhold ? (
+        peakhold = peak;
+        peakcnt = 0;
+        peakreducnt = 0;
+        peak = 0;
+        ):(
+        peakreducnt += 1;
+        peakreducnt > 15 ? (
+            peakhold = peak;
+            );
+        );    
+    );
+peakhold > 0 ? (
+
+    peakcnt += 1;
+    (peakcnt >= 10) ? (
+        peaka -= 0.05;
+        );
+    peaka <= 0 ? (
+        peakhold = peak = 0;
+        );
+
+    peakhold == 1 ? (
+        gfx_set(0.2,0.7,0.2,peaka -0.1 ,0);
+        );
+    peakhold == 2 ? (
+        gfx_set(0.95,0.75,0,peaka ,0);
+        );
+    peakhold == 3 ? (
+        gfx_set(1,0.1,0,peaka ,0);
+        );
+
+    peakhold >= 1 ?(
+        gfx_rect(pkx+1,pky+1,pkw-2,pkh-2);
+
+
+        );
+//    up31 = 1;
+    );
+//up31 = 1;
+*/
+
+
+// ATTBRAKE LED
+offline >= 1 ? (
+  attbrakea_ = 0;
+  ):(
+  
+  //  attbrakea += max(0, (detflt-1)/attbrakea -1) *0 + (detflt-1);
+  //  attbrakea = (detflt-1)^0.25;
+  gfx_dest = 31;
+  
+  attbrakeadd = max(0, ((-gbrake+1)*2)^0.25 - attbrakea );
+  (attbrakeadd > 0) && (attbrakeadd < 0.1) ? attbrakeadd = 0.1;
+  attbrakea += attbrakeadd;
+  attbrakea > 0.95 ? attbrakea = 0.95;
+  
+  attbrakea > 1 ? attbrakea = 1;
+  //gfx_dest = 31;
+  attbrakea -= 0.05;
+  attbrakea < 0.1 ? attbrakea = 0;
+  
+  attbrakea_ = min(1, attbrakea+0.1);
+    
+  /*
+  attbrakea_ < 0.2 ? attbrakea_ = 0;
+  gfx_set(0.1,0.2,1,attbrakea_  ,0);
+  gfx_rect(attbrakex+1,pkatty+1,pkw-2,pkatth-2);
+  */
+  );
+
+  
+  
+  
+  
+
+
+
+
+  
+
+
+
+
+// Blit Attack Defence slider
+/*
+showdef == 1 ? (
+  drag != 39 ? (
+    showdefcnt += 1;
+    showdefcnt > 3 ? (
+      showdefa -= 0.15;
+      );
+    showdefa <= 0 ? (
+      showdefcnt = 0;
+      showdef = showdefa = 0;
+      
+      );
+    );
+  );
+*/
+/*
+atdefhold > 0 ? (
+  showdef = 1;
+  atdefhold += 1;
+  atdefhold > 15 ? (
+    atdefhold = 100;
+    showdef = 0;
+    );
+  );
+*/
+
+
+(drag == 39) || (showdef > 0) || (showdefin > 0) || (upatdef == 1) ? (
+  up30 = 1;
+
+  upatdef > 0 ? upatdef -= 1;
+  (drag == 39) || (showdefin == 1) ? (
+    showdefa < 1 ? showdefa += 0.2;
+    showdefa >= 1 ? (
+      showdefa = 1;
+      showdefin = 0;
+      );
+    upatdefhold = 0;
+    ):(
+    upatdefhold += 1;
+    upatdefhold > 15 ? (
+      showdefa -= 0.05;
+      showdefa <= 0 ? (
+        showdef = showdefa = 0;
+        upatdefhold = 0;
+        );    
+      );
+    );
+
+  gfx_dest = 31;
+/*
+  // Dim GR Meter:
+  gfx_set(0,0,0,0.6 * showdefa ,0);
+  gfx_rect(mtrgrx,mtrtop, mtrw,mtrh);
+*/
+
+/*
+  gfx_blit(8,atdefsize,0,   0,0,800,400,   
+   atdefx-slid2x + (1-atdefsize) * slid2x ,
+   (mtrbot-trkvolbot-2) + (1-atdefsize)*(trkvolbot) - (slider39) * (mtrbot-mtrtop-atdefh-6 ) );
+*/
+  pkatth = f(1, (pkbrake*0.8 + 0.2)^0.7 * pkh );
+  pkatty = f(1, pky + pkh - pkatth );
+  
+  );
+
+col(5);
+gfx_setfont(5);
+
+//Attack Defence number:
+showdef == 1 ? (
+  gfx_dest = 31;  gfx_mode = 0;
+  gfx_setfont(2);
+  pkbrakestr_ = slider39*100 + 0.001;
+  sprintf(pkbrakestr, "%.0f" , pkbrakestr_);
+  gfx_measurestr(pkbrakestr, pkbrakestrw, pkbrakestrh);
+/*
+  gfx_x = mtrgrx + mtrw/2 - pkbrakestrw/2;
+  slider39 < 0.1 ? (
+    gfx_y = atdeff3 =  mtrbot - slidh*atdefsize - pkbrakestrh - slider39 * (mtrbot-mtrtop-slidh*atdefsize) -6;
+    ):(
+    gfx_y = atdeff3 = mtrbot - slider39 * (mtrbot-mtrtop-slidh*atdefsize) +6;
+    );
+*/
+  gr = .27 -.1;
+  gfx_set(gr,gr/5,gr/4*0,min(1,showdefa*2));
+  gfx_rect(atdefx1-6,atdefnry-2,atdefw+14,gfx_texth+1);
+
+  gfx_x = atdeff = atdefx - pkbrakestrw/2;
+  gfx_y = atdeff2 = atdefnry-1;
+  col(4);
+  gfx_a *= showdefa ;
+  gfx_drawstr(pkbrakestr);
+  );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+gfx_dest = -1;
+gfx_x = gfx_y = 0;
+//gfx_set(0.1,0,0,1,0);
+//gfx_rect(0,0,800,400);
+col(10);
+gfx_blit(31,scale,0);
+//gfx_blit(31,1,0 , 0,0,860,450 , 0,0,430,225);
+gfx_blit(32,scale,0 , mtrinx,mtrtop,mtroutx+mtrw-mtrinx,mtrh ,
+ mtrinx*scale,mtrtop*scale,(mtroutx+mtrw-mtrinx)*scale,mtrh*scale);
+ 
+
+
+// ATTACK DEFENCE LED
+offline < 1 ? (
+    gfx_dest = -1;
+    attbrakea_ < 0.2 ? attbrakea_ = 0;
+    
+    gfx_set(0.1,0.2,1,attbrakea_  ,0);
+    gfx_rect((attbrakex+1)*scale,(pkatty+2)*scale,(pkw-2)*scale,(pkatth-2)*scale);
+    
+    
+    
+    // PEAK LED
+    gfx_dest = -1;
+    peak > 0 ? (
+        peaka = 1;
+        peak >= peakhold ? (
+            peakhold = peak;
+            peakcnt = 0;
+            peakreducnt = 0;
+            peak = 0;
+            ):(
+            peakreducnt += 1;
+            peakreducnt > 15 ? (
+                peakhold = peak;
+                );
+            );    
+        );
+    peakhold > 0 ? (
+    
+        peakcnt += 1;
+        (peakcnt >= 20) ? (
+            peaka -= 0.03;
+            );
+        peaka <= 0 ? (
+            peakhold = peak = 0;
+            );
+    
+        peakhold == 1 ? (
+            gfx_set(0.2,0.7,0.2,peaka -0.1 ,0);
+            );
+        peakhold == 2 ? (
+            gfx_set(0.95,0.75,0,peaka ,0);
+            );
+        peakhold == 3 ? (
+            gfx_set(1,0.1,0,peaka ,0);
+            );
+    
+        peakhold >= 1 ?(
+            gfx_rect((pkx+1)*scale,(pky+1)*scale,(pkw-2)*scale,(pkh-2)*scale);
+    
+    
+            );
+    //    up31 = 1;
+        );
+    //up31 = 1;
+    );
+
+
+
+
+
+
+
+
+// MOUSE DRAG SLIDERS
+
+knb1xm = f(1, 30 + slider20 * knbt );
+knb2xm = f(1, 30 + slider21 * knbt );
+knb3xm = f(1, 30 + slider22 * knbt );
+knb4xm = f(1, 30 + slider23 * knbt );
+
+
+(drag == 0) && (mouse_cap > 0) ? dragnew = 1;
+
+mouse_cap > 0 ? (
+    (mouse_x > 150*scale*2) && (mouse_x < 250*scale*2) && (mouse_y > 50*scale*2) && (mouse_y < 150*scale*2) ? (
+        dragnew == 1 ? drag = 1;
+        );
+    (mouse_x > (slid2x-slid2w/2)*scale) && (mouse_x < (slid2x+slid2w/2)*scale) && (mouse_y > slid2my1*scale) && (mouse_y < slid2my2*scale) ? (
+        dragnew == 1 ? drag = 3;
+        );
+    (mouse_x > (slidx - charw/2)*scale) && (mouse_x < (slidx + charw/2)*scale) && (mouse_y > chary*scale) && (mouse_y < (chary + charh +r)*scale) ? (
+        dragnew == 1 ? drag = 4;
+        );
+    (mouse_x > boxrelx*scale) && (mouse_x < (boxrelx+boxrelw)*scale) && (mouse_y > boxrely*scale) && (mouse_y < (boxrely+boxrelh)*scale) ? (
+        dragnew == 1 ? drag = 28;
+        );
+    (mouse_x > atdefx1*scale) && (mouse_x < (atdefx1+atdefw)*scale) && (mouse_y > 10*scale) && (mouse_y < (chary+charh)*scale) ? (
+        dragnew == 1 ? drag = 39;
+        );
+    (mouse_x > titx*scale) && (mouse_x < (titx+titw)*scale) && (mouse_y > tity*scale) && (mouse_y < (tity+tith)*scale) ? (
+        dragnew == 1 ? drag = 99;
+        );
+
+
+    character == 1 ? (
+// Precise sliders
+        (mouse_x > (knb1xm)*scale) && (mouse_x < (knb1xm+knbw)*scale) && (mouse_y > (knb1y-1)*scale) && (mouse_y < (knb1y+knbh+2)*scale) ? (
+            dragnew == 1 ? drag = 20;
+            );
+        (mouse_x > (knb2xm)*scale) && (mouse_x < (knb2xm+knbw)*scale) && (mouse_y > (knb2y-1)*scale) && (mouse_y < (knb2y+knbh+2)*scale) ? (
+            dragnew == 1 ? drag = 21;
+            );
+        (mouse_x > (knb3xm)*scale) && (mouse_x < (knb3xm+knbw)*scale) && (mouse_y > (knb3y-1)*scale) && (mouse_y < (knb3y+knbh+2)*scale) ? (
+            dragnew == 1 ? drag = 22;
+            );
+        (mouse_x > (knb4xm)*scale) && (mouse_x < (knb4xm+knbw)*scale) && (mouse_y > (knb4y-1)*scale) && (mouse_y < (knb4y+knbh+2)*scale) ? (
+            dragnew == 1 ? drag = 23;
+            );
+
+        (mouse_x > (offx)*scale) && (mouse_x < (offx + offw)*scale) && (mouse_y > (offy)*scale) && (mouse_y < (offy + offh*2)*scale) ? (
+            dragnew == 1 ? drag = 25;
+            );
+        (mouse_x > (resx)*scale) && (mouse_x < (resx + resw)*scale) && (mouse_y > (resy)*scale) && (mouse_y < (resy + resh*2)*scale) ? (
+            dragnew == 1 ? drag = 26;
+            );
+
+        ):(
+        
+        (mouse_x > (slidx-slidw/2)*scale) && (mouse_x < (slidx+slidw/2)*scale) && (mouse_y > slidmy1*scale) && (mouse_y < slidmy2*scale) ? (
+            dragnew == 1 ? drag = 2;
+            );
+        
+        offset == 1 ? (
+            (mouse_x > (actx)*scale) && (mouse_x < (actx + actw)*scale) && (mouse_y > (acty)*scale) && (mouse_y < (acty + acth)*scale) ? (
+                dragnew == 1 ? drag = 27;
+                );
+            );
+        
+        (mouse_x > (listx1)*scale) && (mouse_x < (listx1+listw)*scale) && (mouse_y > listy1*scale) && (mouse_y < (listy3+listh)*scale) ? (
+            dragnew == 1 ? drag = 29;
+            );
+        
+
+// Style presets
+        styles == 0 ? (
+            (mouse_x > 20*scale) && (mouse_x < (slidx - slidw/2 -10)*scale) && (mouse_y > (style1y+5)*scale) && (mouse_y < (style1y+styleh-5)*scale) ? (
+                dragnew == 1 ? drag = 30;
+                );
+            (mouse_x > 20*scale) && (mouse_x < (slidx - slidw/2 -10)*scale) && (mouse_y > (style1y+stylespacing-10)*scale) && (mouse_y < (style1y+stylespacing+styleh-5)*scale) ? (
+                dragnew == 1 ? drag = 31;
+                );
+            (mouse_x > 20*scale) && (mouse_x < (slidx - slidw/2 -10)*scale) && (mouse_y > (style1y+stylespacing*2-10)*scale) && (mouse_y < (style1y+stylespacing*2+styleh-5)*scale) ? (
+                dragnew == 1 ? drag = 32;
+                );
+            (mouse_x > 20*scale) && (mouse_x < (slidx - slidw/2 -10)*scale) && (mouse_y > (style1y+stylespacing*3-10)*scale) && (mouse_y < (style1y+stylespacing*3+styleh-5)*scale) ? (
+                dragnew == 1 ? drag = 33;
+                );
+            ):(
+            
+            (mouse_x > 10*scale) && (mouse_x < (slidx-slidw/2)*scale) && (mouse_y > (trktop  + slidh *0.4)*scale) && (mouse_y < (chary-10)*scale) ? (
+              (mouse_cap > 0) && (drag == 0) ? (
+                stylightgo = 1;
+                upslider = 1;
+                upnumber = 1;
+                up31 = 1;
+                styldie = 0;
+                stylightcnt = 0;
+                upcomp += 1;
+                stylewish = 1- (mouse_y-(trktop + slidh /2)*scale)/(stylescale*scale) ;
+                sli2start = slider2;
+
+                (stylewish < 1.04) && (stylewish > 0.9) ? slider2 = 0.96;
+                (stylewish < 0.9) && (stylewish > 0.81) ? slider2 = 0.85;
+                (stylewish < 0.81) && (stylewish > 0.72) ? slider2 = 0.75;
+                (stylewish < 0.72) && (stylewish > 0.59) ? slider2 = 0.7;
+                (stylewish < 0.59) && (stylewish > 0.42) ? slider2 = 0.5;
+                (stylewish < 0.42) && (stylewish > 0.27) ? slider2 = 0.35;
+                (stylewish < 0.27) && (stylewish > 0.09) ? slider2 = 0.2;
+                (stylewish < 0.09) && (stylewish > -0.1) ? slider2 = 0.0;
+                
+                damper = 1- max(0, sli2start-slider2)^0.1  * 0.4;
+                offset == 0 ? reset = 1;
+                upcomp += 1;
+                upleft += 1;
+                
+
+                );
+              );
+            );
+        
+        );
+    );
+
+// Double-click count
+dragnew > 0 ? (
+    dblclkc += 1;
+    );
+
+(dblclkc == 1) && (sglclknew >= 1) ? (
+    sglclk = drag;
+    sglclknew = 0;
+    );
+(dblclkc >= 2) && (mouse_cap == 0) ? (
+    dblclk = drag;
+//  upcomp = 1;
+    );
+dblclkc > 0 ? (
+    dblclkt +=1;
+    );
+dblclkt > 15 ? (dblclkc = dblclkt = dragnew = dblclk = 0);
+
+dblclk20 > 0 ? dblclk20 -= 1;
+
+    // Double-click operations
+dblclk > 0 ? (
+    dblclk == 1 ? (
+        slider1 = 0;
+        upslider = 1;
+        upnumber = 1;
+        );
+    dblclk == 2 ? (
+        slider2 = 0.3;
+        upslider = 1;
+        upnumber = 2;
+        up30 = 1;
+        up31 = 1;
+        );
+    dblclk == 3 ? (
+        slider3 = 0;
+        upslider = 2;
+        upnumber = 1;
+        up30 = 1;
+        up31 = 1;
+        );
+    
+    dblclk == 20 ? (
+        slider9 = progatt;
+        );
+    dblclk == 21 ? (
+        slider10 = progrel;
+        );
+    dblclk == 22 ? (
+        slider5 = prograt;
+        );
+    dblclk == 23 ? (
+        slider18 = progden;  
+        );
+    (dblclk >= 20) && (dblclk <= 23) ? (
+        dblclk20 = 1;
+        upedit = 1;
+        upcomp = 1;
+//        unsave = 2;
+        upslider = 2;
+//        upedit = 1;
+        upnumber = 1;
+        up20 = 1;
+        up31 += 1;
+        );
+    
+    
+    dblclk == 39 ? (
+        (slider39 == 0.6) ? (slider39 = 0) :
+        (slider39 = 0.6);
+        );
+    
+    dblclk == 99 ? (
+//        (eco == 0) ? (eco = 1) : (eco = 0);
+//        ecooo += 1;
+        upall += 1;
+//        upinit += 1;
+        );
+    
+    
+    dblclk > 0 ? (
+        upcomp = 2;
+        dblclk = dblclkc = dblclkt = dragnew = 0;
+        nodrag > 0 ? drag = 0;
+        );
+    );
+
+sglclk > 0 ? (
+    
+    sglclk == 4 ? (
+        slider19 == 0 ? (
+            slider19 = 1;
+            ):(
+            slider19 = 0;
+            );
+        character = slider19;
+        leftbreak = 5;
+        upnumber = 1;
+        upslider = 5;
+        up30 = 1;
+        lefta = 0;
+        );
+    
+    showedita > 0 ? (
+        sglclk == 25 ? (
+            slider25 = 1;
+//            store = 1;
+            light = 1;
+            upedit = 1;
+            );
+        sglclk == 26 ? (
+            slider26 = 1;
+//            offset = 0;
+//            upcomp = 1;
+//            unsave = 1;
+            upedit = 1;
+            );
+        sglclk == 27 ? (
+            slider27 = 1;
+//            upcomp = 1;
+            upedit = 1;
+            );
+        nodrag = 1;
+        );
+
+    sglclk == 28 ? (
+        (slider28 == 0) ? (slider28 = 1) : (slider28 = 0);
+        volmode = slider28;
+        upslider = 1;
+        nodrag = 1;
+
+        );
+    sglclk == 29 ? (
+        (slider29 == 0) ? (slider29 = 1) : (slider29 = 0);
+        styles = slider29;
+        upleft = 1;
+        nodrag = 1;
+        );
+    
+    sglclk == 30 ? (
+        slider2 = 0.96;
+        nodrag = 1;
+        );
+    sglclk == 31 ? (
+        slider2 = 0.60;
+        nodrag = 1;
+        );
+    sglclk == 32 ? (
+        slider2 = 0.33;
+        damper = 1- max(0, chvv-0.33)^0.1  * 0.4;
+        nodrag = 1;
+        );
+    sglclk == 33 ? (
+        slider2 = 0.1;
+        damper = 1- max(0, chvv-0.1)^0.1  * 0.7;
+        nodrag = 1;
+        );
+    sglclk == 39 ? (
+        showdef = showdefin = 1;
+        );        
+    (sglclk >= 30) && (sglclk < 34) ? (
+      stylightgo = 1;
+      upslider = 1;
+      upnumber += 1;
+      up31 = 1;
+      styldie = 0;
+      stylightcnt = 0;
+      upcomp += 1;
+      offset == 0 ? reset = 1;
+      );
+    
+    );
+
+mouse_cap > 0 ? (
+    (mouse_cap != mouse_capold) ? dragnew = 1 : dragnew = 0;
+    drag == 0 ? (
+        dragstartx = mouse_x;
+        dragstarty = mouse_y;
+        );    
+    drag != dragold ? dragstart = slider(drag);
+    dragold = drag;
+    sglclk = 0;
+    
+    );
+
+
+// Click-activated updates:
+(mouse_cap != mouse_capold) ? (
+  (drag == 4) || ((drag >= 30) && (drag <= 33)) ? (
+//    upleft += 1;
+    upcomp += 1;
+    );
+//  ((drag >= 20) && (drag <= 23)) ? (
+//    );
+/*
+  (drag == 25) || (drag == 26) || (drag == 27) ? (
+    upleft += 1;
+    upedit += 1;
+    );
+*/
+  drag == 28 ? up30 = 1;
+  );  
+/*
+(drag == 2) ? (
+  upleft += 1;
+  upcomp += 1;
+  );
+
+((drag >= 30) && (drag <= 33)) ? (
+  upleft += 1;
+  );
+*/
+
+
+// Drag start slider position
+dragnew > 0 ? (
+    dragstart = slider(drag);
+    dragstartx = mouse_x;
+    dragstarty = mouse_y;
+    dragnew = 0;
+    );
+
+(mouse_cap == 0) ? (
+    drag = dragtravel = 0;
+    sglclknew = 1;
+    );
+
+
+dragmax[1] = (trkbot-trktop)*scale;
+dragmax[2] = (trkbot-trktop)*scale;
+dragmax[3] = (trkbot-trktop)*scale;
+
+dragmax[20] = knbt*scale;
+dragmax[21] = knbt*scale;
+dragmax[22] = knbt*scale;
+dragmax[23] = knbt*scale;
+
+dragmax[39] = (trkbot-trktop)/2 *scale;
+
+
+// Prevent following single-clicks:
+(dragold == 29) || (dragold == 28) ? (
+  nodrag = 1;
+
+//(dragold == 39) ? 
+  );
+
+// Drag operations
+drag > 0 ? (
+
+    (drag == 1) ? (upnumber = 1);
+    (drag == 4) || ((drag >= 30) && (drag <= 33))? (
+//      upnumber = 1;
+      up31 = 1;
+      );
+    
+    (drag == 2) ? (
+      upslider = 1;
+      upnumber = 1;
+//      up31 = 1;
+      );
+    (drag == 3) ? (
+      upslider = 1;
+      upnumber = 1;
+//      up31 = 1;
+      );
+    (drag >= 20) && (drag <= 23) ? (
+      upcomp = 1;
+      upslider = 1;
+      upedit = 1;
+      upnumber = 1;
+/*
+      upedit += 1;
+      up31 = 1;
+*/
+      );
+/*
+    (drag == 28) ? (
+      up30 = 1;
+      upslider = 1;
+      );
+*/
+// ådrag
+        
+    (mouse_cap > 1) ? (dragprecise = 4) : (dragprecise = 1);
+    drag >= 20 ? dragprecise *= 2;
+    
+    dragtravel = (( mouse_x - dragstartx) + (dragstarty - mouse_y)) / dragprecise;
+    
+    nodrag == 0 ? (
+        drag == 3 ? (
+            slider3 = dragstart + ((dragtravel*24)/dragmax[3] )  ;
+            slider3 = floor(slider3 * 100)/100;
+            slider3 > 24? slider3 = 24;
+            slider3 < -24 ? slider3 = -24;
+            ):(
+            p == 99 ? (
+                p=0;                
+
+
+
+                ):(
+                drag == 39 ? (
+//                    pkbrake = slider39;
+                    slider39 = floor((dragstart + (dragtravel/dragmax[drag] ))*100+.4)/100  ;
+//                    slider39_ < -0.5 ? slider39_ += 3;
+//                    slider39_ > 2.5 ? slider39_ -= 3;
+                    slider39 < 0.0 ? slider39 = 0.0;
+                    slider39 > 1 ? slider39 = 1;
+//                    slider39 = floor(slider39_ + 0.5);
+                    upcomp = 1;
+                    upgr = 2;
+                    ):(
+                    slider(drag) = (dragstart + (dragtravel/dragmax[drag] ))  ;
+                    slider(drag) > 1 ? slider(drag) = 1;
+                    slider(drag) < 0 ? slider(drag) = 0;
+                    );
+                );
+            );
+        );
+    offline < 1 ? upcomp += 1;
+    );
+
+nodrag = 0;
+
+mouse_capold = mouse_cap;
+
+offline += 0.1;
+
+
+// upall > 0 ? upall -= 1;
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+BLITS:
+1 knob
+2 line
+3 knob + line
+4 slider
+5 vol slider #1
+6 small sliders
+7 meter boxes
+8 vol slider #0
+9 knobs
+10 wood incl 11 branch
+12 labels
+14 boxes
+15 LEFT
+16 Edit buttons
+19 All Sliders
+
+32 meters
+*/
+

@@ -1,0 +1,5304 @@
+desc: DynEQ 0.973  [mrelwood]
+
+// Includes code from:
+//
+// gfxanalyser (Cockos)
+// 1175 (Stillwell)
+// Transient Controller (LOSER)
+// BandPassFilter (Cockos)
+
+
+// 1175 COMPRESSOR:
+
+// Copyright 2006, Thomas Scott Stillwell
+// All rights reserved.
+//
+//Redistribution and use in source and binary forms, with or without modification, are permitted 
+//provided that the following conditions are met:
+//
+//Redistributions of source code must retain the above copyright notice, this list of conditions 
+//and the following disclaimer. 
+//
+//Redistributions in binary form must reproduce the above copyright notice, this list of conditions 
+//and the following disclaimer in the documentation and/or other materials provided with the distribution. 
+//
+//The name of Thomas Scott Stillwell may not be used to endorse or 
+//promote products derived from this software without specific prior written permission. 
+//
+//THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR 
+//IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND 
+//FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS 
+//BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES 
+//(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR 
+//PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, 
+//STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF 
+//THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+
+
+// TRANSIENT CONTROLLER:
+
+// (C) 2007, Michael Gruhn.
+//
+// NO WARRANTY IS GRANTED. THIS PLUG-IN IS PROVIDED ON AN "AS IS" BASIS, WITHOUT
+// WARRANTY OF ANY KIND. NO LIABILITY IS GRANTED, INCLUDING, BUT NOT LIMITED TO,
+// ANY DIRECT OR INDIRECT,  SPECIAL,  INCIDENTAL OR CONSEQUENTIAL DAMAGE ARISING
+// OUT OF  THE  USE  OR INABILITY  TO  USE  THIS PLUG-IN,  COMPUTER FAILTURE  OF
+// MALFUNCTION INCLUDED.  THE USE OF THE SOURCE CODE,  EITHER  PARTIALLY  OR  IN
+// TOTAL, IS ONLY GRANTED,  IF USED IN THE SENSE OF THE AUTHOR'S INTENTION,  AND
+// USED WITH ACKNOWLEDGEMENT OF THE AUTHOR. FURTHERMORE IS THIS PLUG-IN A  THIRD
+// PARTY CONTRIBUTION,  EVEN IF INCLUDED IN REAPER(TM),  COCKOS INCORPORATED  OR
+// ITS AFFILIATES HAVE NOTHING TO DO WITH IT.  LAST BUT NOT LEAST, BY USING THIS
+// PLUG-IN YOU RELINQUISH YOUR CLAIM TO SUE IT'S AUTHOR, AS WELL AS THE CLAIM TO
+// ENTRUST SOMEBODY ELSE WITH DOING SO.
+
+// Further more is this released under the GPL License:
+// http://www.gnu.org/licenses/gpl.html
+
+
+
+// BAND PASS FILTER / GFXANALYSER:
+
+// This effect Copyright (C) 2004 and later Cockos Incorporated
+// License: GPL - http://www.gnu.org/licenses/gpl.html
+
+
+
+
+//tags: analysis FFT meter spectrum Dynamic EQ
+//author: mrelwood
+/*
+Copyright (C) 2018 - mrelwood plugins
+License: LGPL - http://www.gnu.org/licenses/lgpl.html
+*/
+
+slider1:3<0,5,1{1024,2048,4096,8192,16384,32768}>-FFT size
+slider2:79<26,171,6>-floor
+
+slider3:0<0,1,1{disabled,enabled}>-show phase
+slider4:2<0,3,1{rectangular,hamming,blackman-harris,blackman}>-window
+slider5:1000<0,2500,.5>-integration time (ms)
+slider6:3<0,3.0,0.01>-slope (dB/oct)
+slider7:3<0,8,1{6,0,-6,-12,-18,-24,-30,-36,-42}>-roof (dB)
+slider9:0<0,1,1>-Help
+slider8:0<0,4,1{Stereo,Mid,Side,Left,Right}>-Analyzer mode
+
+slider10:1<0,1,1>-Analyzer on/off
+
+slider11:300<50,20000,0.01>-Frequency (Hz) (See Below!)
+
+slider12:2<1,5,0.1>-Width (Oct)
+slider13:0<-12,12,0.1>-Gain (dB)
+//// //// //// ////
+
+//// 1175 COMPRESSOR
+slider14:-2<-12,-0.2,0.1>-Ratio (12="ALL")
+//slider15:0<-20,20,0.1>Gain (dB)
+slider15:25.5<5,100,0.1>-Release (ms)
+slider16:12.187<0.1,50,0.01>-Attack (ms)
+slider17:-6<-60,0,0.1>-
+old (dB)
+slider18:0<0,1,1{-,Bypass}>-Bypass Red
+slider19:0<0,1,1{-,Steep}>-Steep1
+slider20:0<-9,9,0.1>-Band input (dB)
+slider31:0<0,4,1{Stereo,Mid,Side,Left,Right}>-Operation mode
+slider32:1<0,1,1{Normal,Opto}>-Opto release red
+
+
+// BAND 2:
+
+slider21:3000<50,20000,0.01>-Frequency2 (Hz) (See Below!)
+
+slider22:2<1,5,0.1>-Width2 (Oct)
+slider23:0<-12,12,0.1>-Gain2 (dB)
+//// //// //// ////
+
+//// 1175 COMPRESSOR
+slider24:-2<-12,-0.2,0.1>-Ratio2 (12="ALL")
+//slider15:0<-20,20,0.1>Gain (dB)
+slider25:25.5<5,100,0.1>-Release2 (ms)
+slider26:12.187<0.1,50,0.01>-Attack2 (ms)
+slider27:-6<-60,0,0.1>-Threshold2 (dB)
+slider28:0<0,1,1{-,Bypass}>-Bypass2
+slider29:0<0,1,1{-,Steep}>-Steep2
+slider30:0<-9,9,0.1>-Band2 input (dB)
+slider41:0<0,4,1{Stereo,Mid,Side,Left,Right}>-Operation mode
+slider42:1<0,1,1{Normal,Opto}>-Opto release green
+
+slider50:0<0,1,1{New,Mature}>-Mature REG state
+slider51:1<1,8,1>-Communications channel
+slider52:0<-1,2,1{Hide,Auto,Yes,ChannelSelect}>-Show Others
+
+slider33:100<0,100,1>-Mode1 Blend %
+slider34:100<0,100,1>-Mode2 Blend %
+
+slider35:0<0,1,1>-Solo1
+slider36:0<0,1,1>-Solo2
+
+in_pin:in L
+in_pin:in R
+in_pin:SC in L
+in_pin:SC in R
+out_pin:out L
+out_pin:out R
+out_pin:SC L passthrough
+out_pin:SC R passthrough
+
+options:gmem=DynEQ_mrelwood
+
+
+
+@init
+ver = "0.973";
+
+
+/////// LIMITER /////////
+lim_HOLDTIME = srate/1024;
+
+lim_r1Timer = 0;
+//r2Timer = HOLDTIME/2;
+lim_r2Timer = srate/1024;
+
+
+lim_release =   0  /1000;
+lim_r = exp(-3/(srate*max(  0  ,0.05)));
+
+lim_thresh = 10^(  3  /20);
+lim_ceiling = 10^(  3  /20);
+//lim_volume = lim_ceiling/lim_thresh;
+lim_volume = 1;
+
+
+///////////////////////////
+
+//mygmem1 = mygmem2 = -1;
+gmresettimer = -50;
+gmnoobtimer = 0;
+showtimer = 20;
+gm_readothers = 1000;
+
+
+//ext_noinit = 1.0 ;
+gfx_ext_retina=1.0;
+ext_nodenorm=1;
+//recpos=0;
+max_fft_size=32768;
+fftsize=max_fft_size;
+gfx_clear=-1;
+windowtype=-1;
+fftidx=-1;
+
+dx = 1;
+
+clip = 0;
+//tlt_gain = 0;
+sr3 = 3*srate;
+gfactor = 4;
+n = 0;
+//g_reset = 1;
+e10 = 10^-10;
+mv = 2^(-0.2/6);
+
+/*
+gr_meter = 1;
+gr_meter2 = 1;
+gr_meter_decay = exp(1/(1*srate));
+*/
+expv_meter = exp_meter = 1;
+tv_meter = 1;
+expv_meter2 = exp_meter2 = 1;
+tv_meter2 = 1;
+
+expthres = expthres2 = 1;
+
+gr_meter = gr_meter2 = 1;
+grv_meter = grv_meter2 = 1;
+
+t_gain = t_gain2 = 1;
+
+sqrt2 = sqrt(2);
+s2 = sqrt2/2;
+
+//roofgain = 1;
+
+
+histsize=max_fft_size + (max_fft_size*0.5 - 1);
+window=histsize;
+fftworkspace=window+(max_fft_size*0.5 + 1);
+integrate_buf = fftworkspace + max_fft_size*2;
+
+///////// FAIR:
+  log2db = 8.6858896380650365530225783783321; // 20 / ln(10)
+  db2log = 0.11512925464970228420089957273422; // ln(10) / 20 
+  i=0;
+  attime=attime2=0.0002; //0.2ms
+//  reltime=0.300; //300ms
+  reltime=reltime2=0.100; //100ms
+//  rmstime=0.000050; //50us
+  rmstime=rmstime2=0.0005; //0.5ms
+  maxover=maxover2=0;
+  ratio=ratio2=1;
+  cratio=cratio2=1;
+  rundb=rundb2=0;
+  overdb=overdb2=0;
+  maxover=maxover2=0;
+  
+  atcoef=exp(-1/(attime * srate));
+  relcoef=exp(-1/(reltime * srate));
+  rmstime = 0.5 / 1000000; 
+  rmscoef=exp(-1/(rmstime * srate));
+  
+  atcoef2=exp(-1/(attime2 * srate));
+  relcoef2=exp(-1/(reltime2 * srate));
+  rmstime2 = 0.5 / 1000000; 
+  rmscoef2=exp(-1/(rmstime2 * srate));
+  
+  bias = bias2 = 80;
+
+///////// MODESSER:
+/*
+  log2db = 8.6858896380650365530225783783321; // 20 / ln(10)
+  db2log = 0.11512925464970228420089957273422; // =  log(10) / 20 
+  
+  ratatcoef = exp(-1/(0.00001 * srate));
+  ratatcoef2 = ratatcoef;
+  ratrelcoef = exp(-1/(0.5 * srate));
+  ratrelcoef2 = ratrelcoef;
+  atcoef=exp(-1/(attime * srate));
+  atcoef2=exp(-1/(attime2 * srate));
+  relcoef=exp(-1/(reltime * srate));
+  relcoef2=exp(-1/(reltime2 * srate));
+*/
+  gr_meter = gr_meter2 = 1;
+//  gr_meter_decay = gr_meter_decay2 = exp(1/(1*srate));
+
+//    gr_meter_decay = gr_meter_decay2 = 1/srate * 3 +1;
+    gr_meter_decay = gr_meter_decay2 = 1/srate * 3 +1;
+
+
+    sc_decay = sc_decay2 = 1/srate * 6 +1;
+
+    hold = hold2 = 1.1;  // 1-3, hold meter at max
+  
+    
+sc_peak_timer = sc_peak_timer2 = 1000;
+
+
+
+
+field1x = gfx_w/5;
+field2x = gfx_w/3*2;
+
+
+
+/*
+blend1 = 0;
+blend2 = 0;
+*/
+
+
+// INIT TRANSIENT
+
+t_b1Env1 = -exp(-30 / srate );
+t_a0Env1 = 1.0 + t_b1Env1;
+t_b1Env2 = -exp(-1450 / srate );
+t_a0Env2 = 1.0 + t_b1Env2;
+t_b1Env3 = -exp(-5 / srate );
+t_a0Env3 = 1.0 + t_b1Env3;
+
+/*
+t_b1Env1 = -exp(-32 / srate );
+t_a0Env1 = 1.0 + t_b1Env1;
+t_b1Env2 = -exp(-1200 / srate );
+t_a0Env2 = 1.0 + t_b1Env2;
+t_b1Env3 = -exp(-2.5 / srate );
+t_a0Env3 = 1.0 + t_b1Env3;
+*/
+t_meterbase = 1;
+
+
+// INIT TRANSIENT 2
+
+t_b1Env12 = -exp(-30 / srate );
+t_a0Env12 = 1.0 + t_b1Env12;
+t_b1Env22 = -exp(-1450 / srate );
+t_a0Env22 = 1.0 + t_b1Env22;
+t_b1Env32 = -exp(-5 / srate );
+t_a0Env32 = 1.0 + t_b1Env32;
+
+t_meterbase2 = 1;
+
+
+
+///////////
+
+
+@serialize
+
+store_01 = file_var(0, mygmem1);
+store_02 = file_var(0, mygmem2);
+
+srate > 0 ? old_srate = srate;
+store_03 = file_var(0, srate);
+
+gm_readothers = 1000;
+store_04 = file_var(0, gm_readothers);
+
+
+@slider
+
+
+
+ 
+
+
+
+modeana = slider8;
+
+
+freq = slider11;
+width = slider12;   
+thresli1 = slider17;
+  cthresh = thresli1 - bias;
+  cthreshv = exp(cthresh * db2log);
+//ratio = ((-slider14)-1)*3+1;
+//ratio = slider14;
+slider14 < -1 ? (ratio = ((-slider14)-1)*3+1) : (ratio = 1-(1-(-slider14))*1.5);
+//slider14 < -1 ? (ratio = ((-slider14)-1)*3+1) : (ratio = -slider14);
+
+ratio < 0.05 ? ratio = 0.05;
+
+attack = slider16;
+release = slider15;
+gain1sli = slider13;
+bypass1 = slider18;
+steep1 = slider19;
+band1insli = slider20;
+mode1 = slider31;
+opto1 = slider32;
+//blend1 = slider53;
+
+freq2 = slider21;
+width2 = slider22;
+thresli2 = slider27;
+  cthresh2 = thresli2 - bias2;
+  cthreshv2 = exp(cthresh2 * db2log);
+//ratio = slider14;
+slider24 < -1 ? (ratio2 = ((-slider24)-1)*3+1) : (ratio2 = 1-(1-(-slider24))*1.5);
+
+ratio2 < 0.05 ? ratio2 = 0.05;
+
+attack2 = slider26;
+release2 = slider25;
+gain2sli = slider23;
+bypass2 = slider28;
+steep2 = slider29;
+band2insli = slider30;
+mode2 = slider41;
+opto2 = slider42;
+//blend2 = slider54;
+
+blend1sli = slider33;
+blend2sli = slider34;
+
+solo1 = slider35;
+solo2 = slider36;
+
+
+slider2o = -slider2;
+
+//slider2 != lfloor ? old_w=0;
+slider2o != lfloor ? old_w=0;
+
+slope = slider6;
+roof = slider7;
+chanslid = slider51;
+others = slider52;
+
+
+@block // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+slider14 < -1 ? (ratio = ((-slider14)-1)*3+1) : (ratio = 1-(1-(-slider14))*1.5);
+ratio < 0.05 ? ratio = 0.05;
+
+slider24 < -1 ? (ratio2 = ((-slider24)-1)*3+1) : (ratio2 = 1-(1-(-slider24))*1.5);
+ratio2 < 0.05 ? ratio2 = 0.05;
+
+
+bypass1 = slider18;
+bypass2 = slider28;
+
+steep1 = slider19;
+steep2 = slider29;
+
+opto1 = slider32;
+opto2 = slider42;
+
+solo1 = slider35;
+solo2 = slider36;
+
+others = slider52;
+
+
+blend1 = 1- slider33/100;
+blend2 = 1- slider34/100;
+
+
+/*
+cap_mode == 51 && mouse_cap == 0 ?(
+  slider51 = floor(slider51)+0.5;
+  slider_automate(slider51);
+  newchannel = 1;
+  );
+*/
+//newchannel == 1 ? newchannel = -1;
+/*
+cap_mode == 51 ? (
+//  showothers = 1;
+//  mouse_cap > 0 ? newchannel = 2;
+  mouse_cap == 0 ?(
+    slider51 = floor(slider51)+0.5;
+    slider_automate(slider51);
+    showplease = 1;
+    
+//    newchannel == 2 ? newchannel = 1;
+//    newchannel = 1;
+    );
+  );
+*/  
+//cap_mode != 51 ? newchannel = 0;
+
+//oldchannel = channel;
+
+
+
+
+
+
+////////// REWRITING GMEM FOR 0.93
+
+
+// CONDITIONS // gmwrite 1=overwrite 2=writeempty 3=wait 4=waaait
+// gmreset: 1=reset 2=mouse button still pressed
+
+//oldchannel = channel;
+
+// changing channel
+channel = ((floor(slider51)-1) * 100);
+
+oldchannel != channel ? (
+  gmem[mygmem1] = 0;
+  gmem[mygmem2] = 0;
+  gmwrite = 2;
+  gmresettimer = 0;
+  oldchannel = channel;
+  gmreset = 2;
+  );
+
+gmreset == 2 && mouse_cap == 0 ? gmreset = 1;
+
+// noob
+/*
+mygmem1 == -1 ? (
+  gmwrite = 4;
+  gmnoobtimer +=1;
+  gmnoobtimer > (srate/samplesblock * 3) ? (
+    gmwrite = 3;
+    mygmem1 = mygmem2 = 0;
+    );
+  gmresettimer = 0;
+  );
+*/
+
+
+
+
+//No gmem slot ? (Resetted or teen)
+mygmem1 == 0 || mygmem2 == 0 ? gmwrite = 3;
+
+//Check, Losing fight, etc?
+gmchecktimer > (srate/samplesblock * 0.5) && gmwrite == 0 && gmreset == 0 ? (
+  //old channel gmems?
+  abs(mygmem1 - channel) > 50 ? (
+    
+    gmem[mygmem1] = 0;
+    gmem[mygmem2] = 0;
+    gmwrite = 2;
+    );
+
+  // adjusted, go update, don't reset
+
+  bypass1 && localgm1 != 2 ? gmwrite = 1 :
+    localgm1 != ( floor(freq)*10 + floor(mode1) ) ? gmwrite = 1;
+
+
+  bypass2 && localgm2 != 2 ? gmwrite = 1 :
+    localgm2 != ( floor(freq2)*10 + floor(mode2) ) ? gmwrite = 1;
+
+  
+ //   gmresettimer = 0;
+//    );
+  
+  //got reseted or kicked out, get new spot, don't reset
+//  gmem[mygmem1] == 0 || gmem[mygmem2] == 0 ||
+  localgm1 > gmem[mygmem1] || localgm2 !=gmem[mygmem2] ? (
+  
+    gmwrite = 3;
+ //   gmresettimer = 0;
+    );
+
+  gmchecktimer = 0;
+  );
+
+
+
+//gmresettimer += 1 ;
+gmchecktimer += 1 ;
+
+
+  
+// wait random  
+gmwrite == 3 ? (
+  gmresettimer > rand(1) ?  (gmwrite = 2) : (gmresettimer += 1);
+  );
+/*
+mygmem1 == -1 ? (
+  gmwrite = 1;
+  gmreset = 1;
+      );
+*/
+// update
+gmwrite == 1 ? (
+  localgm1 = floor(freq)*10 + floor(mode1);
+  localgm2 = floor(freq2)*10 + floor(mode2);
+
+  bypass1 == 1 ? localgm1 = 2;
+  bypass2 == 1 ? localgm2 = 2;
+
+  gmem[mygmem1] = localgm1;
+  gmem[mygmem2] = localgm2;
+  
+//  gmresettimer = 0;
+  gmchecktimer = 0;
+  gmwrite = 0;
+  );
+
+
+// reset whole channel
+gmwrite == 0 || gmreset == 1 ?
+  // #1 headstart
+  mygmem1 - floor(mygmem1/100)*100 == 1 ? (
+    gmresettimer += 0.5;
+    gmem[channel] = gmresettimer;
+    );    
+
+  gmresettimer > (srate/samplesblock *20) || gmreset == 1 ? (
+  
+    king == 1 || gmreset == 1
+//    || king == 0 && gmem[channel] < (srate/samplesblock *9)
+    || gmresettimer > (srate/samplesblock * 30) ? (
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       sgmem[channel] < (srate/samplesblock * 5) ? (
+      zr = 0 + channel;
+      while (zr < 41 + channel) (
+        gmem[zr] = 0;
+        zr += 1;
+        );
+      mygmem1 = 1 + channel;
+      mygmem2 = 2 + channel;
+      gmem[mygmem1] = localgm1;
+      gmem[mygmem2] = localgm2;
+      king = 1;
+      gmresettimer = 0;
+      gmgmwritetimer = 0;
+      gmchecktimer = 0;
+      gmwrite = 0;
+      gmreset = 0;
+      gm_dontread = 1;
+      );
+    );
+  );
+mygmem1 > (2 + channel) ? king = -1;
+
+
+
+// gmwrite to first empty
+gmwrite == 2 ? (
+
+  localgm1 = floor(freq)*10 + floor(mode1);
+  localgm2 = floor(freq2)*10 + floor(mode2);
+  
+  bypass1 == 1 ? localgm1 = 2;
+  bypass2 == 1 ? localgm2 = 2;
+
+  wri = 1 + channel;
+  while ( wri < 41 + channel) (
+    gmem[wri] == 0 ? (
+      
+      gmem[wri] = localgm1;
+      mygmem1 = wri;
+      wri2 = wri + 1;
+      gmem[wri2] = localgm2;
+      mygmem2 = wri2;
+      wri = 50 + channel;  
+      gmresettimer = 0;
+      );
+    wri +=2 ;
+    );  // while
+
+  gmchecktimer = 0;
+  gmwrite = 0;
+  (mygmem1 - floor(mygmem1/100)*100) == 1 ? king = 1 : king = -1;
+  king == 1 ? gmem[channel] = 0;
+  );
+
+gmwrite == 0 ? gmresettimer += 1;
+
+
+  
+oldchannel = channel;
+
+kingcheck == gmem[0+channel] ? (
+  kingcount += 1 ;
+  kingcount > 100 ? (
+    gmreset = 1;
+    kingcount = 0;
+    );
+  ):(
+  kingcount = 0;
+  );
+kingcheck = gmem[0+channel];
+
+king == 0 ? (
+  showothers = 0;
+  showplease = 0;
+  
+  gfx_dest = 1;
+  gfx_mode = 1;
+  gfx_setimgdim(1,-1,-1);
+  gfx_setimgdim(1,gfx_w,gfx_h);
+  
+  gfx_x = 0 ; gfx_y = 0;
+  gfx_set(0,0.05,0.05,1);
+  gfx_rectto(gfx_w, gfx_h);
+  gfx_mode = 0;
+  gfx_dest = -1;
+
+  );
+    
+
+    
+
+// AUTOATTACK v1
+//autoatt1 =  max(0.0005 , ((100-(slider11/372)) / (slider11^0.08)-34) / 1000  );
+//autoatt2 =  max(0.0005 , ((100-(slider21/372)) / (slider21^0.08)-34) / 1000  );
+
+// AUTOATTACK NEW GRAPH (in ms)
+autoatt1 = max( (10-log(freq))*4.5-2.5 , (7/log(freq))^0.8 *18 - freq/600);
+autoatt2 = max( (10-log(freq2))*4.5-2.5 , (7/log(freq2))^0.8 *18 - freq2/600);
+
+// AUTORELEASE
+
+//autorel1 = (5-log(freq))^1.1 * (slider15/15+0.166) * 10;
+//autorel2 = (5-log(freq2))^1.1 * (slider25/15+0.166) * 10;
+
+//autorele1 = ((9.8- log(freq)) * slider15^0.2 );
+//autorele2 = (slider25 + slider25*(5- log(freq2)) * (slider25/15+0.166) * 10);
+
+//autorele1 = (5- (log(freq)))* (2 + slider15/10);
+
+
+
+
+autorele1 = ( min(60 , slider15*0.5 + (5-log10(freq))^1.1 * (slider15/15+0.33) * 10 -20) );
+autorele2 = ( min(60 , slider25*0.5 + (5-log10(freq2))^1.1 * (slider25/15+0.33) * 10 -20) );
+
+
+
+
+/*
+relt10k = (5-log10(10000)) * (20/15+0.33);
+relt1k = (5-log10(1000)) * (20/15+0.33);
+relt100 = (5-log10(100)) * (20/15+0.33)*;
+*/
+
+//reltime = auto-1 * slider/15+ 
+
+modeana = slider8;
+mode1 = slider31;
+mode2 = slider41;
+
+
+
+
+mix = 0;
+link = 1;
+//hardclip = 1;
+hardclip = 0;
+
+/*
+slider2 != lfloor ? (
+  lfloor = slider2;
+  minvol=2*exp(log(10)/20*slider2);
+);
+*/
+slider2o = -slider2;
+slider2o != lfloor ? (
+  lfloor = slider2o;
+  minvol=2*exp(log(10)/20*slider2o);
+);
+
+//minvol = -1;
+//ää
+
+roofgain = 0.5;
+
+roof > 0 ? (
+  roofgain *= 2;
+  roof > 1 ? (
+    roofgain *= 2;
+    roof > 2 ? (
+      roofgain *= 2;
+      roof > 3 ? (
+        roofgain *= 2;
+        roof > 4 ? (
+          roofgain *= 2;
+          roof > 5 ? (
+            roofgain *= 2;
+            roof > 6 ? (
+              roofgain *=2;
+              roof > 7 ? (
+                roofgain *=2;
+              );
+              );
+            );
+          );
+        );
+      );
+    );
+  );
+
+
+
+
+//// //// //// ////
+freq1dampx = (freq/20000)^6 *3 +1;
+
+gain=2 ^ (slider13/6);
+band1in = 2^(slider20/6);
+dampening = (1.45^(slider12*0.98)-0.65) * freq1dampx;
+width = slider12;
+lastdamp=dampening;
+
+freq2dampx = (freq2/20000)^6 *3 +1;
+
+gain2=2 ^ (slider23/6);;
+band2in = 2^(slider30/6);
+dampening2 = (1.45^(slider22*0.98)-0.65) * freq2dampx;
+width2 = slider22 ;
+lastdamp2 = dampening2;
+
+
+//// 1175 COMPRESSOR
+//thresh = slider17 - (slider11^0.2*0.8-2)* min(1 , (slider17/-3)) ;// + width *1;
+thresh = slider17 - (log(slider11/100)*0.6) * min(1 , (slider17/-3)) ;// + width *1;
+threshv = exp(thresh * db2log);
+
+thresh2 = slider27 - (log(slider21/100)*0.6) * min(1 , (slider27/-3)) ;// + width2 *1;  
+threshv2 = exp(thresh2 * db2log);
+
+
+//slider14 > -1 ?
+//  expand = (( ((1-threshv)^4*(-1)+1)^3 -1) * slider53) +1  :
+// gain multiplier for expander (thr0) 1--0
+//  expand = 1;
+
+//ratio = -slider14;
+//ratio2 = -slider24;
+  
+  
+  
+// EXPANDER BLOCK
+
+slider14 > -1 ? (
+//  ratio = (slider14)/(-3)*2+(1/3);
+//  ratio = -slider14/2;
+//  attime = 0.0006;
+//  attime = 0.000005;
+//  attime = 0.0000005 + log(freq)/;
+  attime = (0.00001/(10^(log(freq))))*400;
+  
+  
+  
+//  reltime = 0.0385 - log10(freq)* 0.009;
+//  reltime = 0.0385 - log10(freq)* 0.009;
+//  reltime = ( 120- (log(freq/40)*20) +2 )/1000 /2; // 2-100ms
+//  reltime = ( 43- (log(freq/40)*7) )/1000 *3; // 2-40ms
+  reltime = ( 15- (log(freq/10000)*20) )/1000 *1.5 ; // 2-40ms
+//  expthres = (sin(threshv*1.8)*1.005)^1; // gain curve for threshold, 0 -- 
+//  expthres = (1-(SIN(1.4-(slider17/60+1)*1.6)*1.016)^4)^4; // gain curve for threshold, 0 -- 
+  expthres = (SIN((slider17/60+1)*1.6)*1.002)^10 ;
+//  expthres = (sin(threshv*1.8)*1.005)^0.8 * freq/5000;
+//  exprat = 1.05-(ratio-(1/3))/(2/3); //multiplier, linear 0 -- 1.
+
+// For 1176:
+//  exprat = (slider14+1) *1.05; //multiplier, linear 0 -- 1.
+// For FAIR:
+  exprat = (slider14+1) *0.95; //multiplier, linear 0 -- 1.
+
+
+//  t_attack = ((slider14+1)^1.2 *0.95) * ((-slider17/100)^0.7+1.0) ;
+  t_attack = ((slider14+1)^1.2 *1.3) + ((-slider17/100)^0.7+0.3)/5 - freq/28000;
+//  t_attack = 0;
+  t_sustain = ((slider14+1)^1 * (-2));
+//t_sustain = -1.5;
+  expgain = 1- (exprat) * (1-expthres);
+  
+//    t_attack = 0;
+
+  
+  ):(
+  expgain = 1;
+  t_attack = t_sustain = 0;
+  t_meter = 1;
+
+  attime = min(50,  max(  (slider16/20+0.55)*autoatt1 + (slider16/2-6) , 0.5 )   )/1000 ;  
+  
+  opto1 ? (
+  //  reltime = ( 1/((1-grv^0.7+0.25)^2.5) ) *4.5 /1000;
+    reltime_ = ( 1/((1-grv^0.8+0.25)^2.5) ) *0.2*slider15 /1000;
+    ):(
+    reltime_ = (slider15) /1000 ;
+    );
+  
+  reltime = max(0.010 , reltime_ + autorele1/1000);
+  );  
+
+atcoef=exp(-1/(attime * srate));
+relcoef=exp(-1/(reltime * srate));
+
+//  ratio == 12 ? (allin=1; cratio=20;) : (allin=0; cratio = ratio;);
+cthresh = (softknee ? (thresh -3) : thresh);
+cthreshv = exp(cthresh * db2log);
+//  makeup = slider15;
+makeup = 0;
+makeupv = exp((makeup+autogain) * db2log);
+  // attime = slider16 / 1000;
+
+//  attime = max(0.0005, 
+//    min(0.05, ((slider16)/33+0.0485) * autoatt1 + (slider16/50*0.005 - 0.001) ) );
+//  reltime = slider15 / 1000;
+//  reltime = slider15 / 1000 * ((grv^2)*1.5);
+//  reltime = slider15 / 1000 * grv*1.4;
+
+//AUTORELE
+//  reltime   = (slider15 + (slider15^0.1) * autorel1) /1000;
+//  autorele1 = (9.8- (log(freq)))*  (3 + slider15/6) -3;
+// x2, @slider/10 x10
+
+
+
+
+// EXPANDER 2 BLOCK
+
+slider24 > -1 ? (
+//  ratio2 = (ratio2)/(-3)*2+(1/3);
+//  attime2 = 0.0001;
+  attime2 = (0.00001/(10^(log(freq2))))*400;
+//  reltime2 = 0.0385 - log10(freq2)* 0.009;
+//  reltime2 = 0.0385 - log10(freq2)* 0.009;
+//  reltime2 = ( 120- (log(freq2/40)*20) +2 )/1000 /2; // 2-100ms
+//  reltime2 = ( 43- (log(freq2/40)*7) )/1000 *3; // 2-40ms
+  reltime2 = ( 15 - (log(freq2/10000)*20) )/1000 *1.5; // 2-40ms
+//reltime2 = 0.005;
+//  expthres2 = (sin(thres2hv*1.8)*1.005)^1; // gain2 curve for thres2hold, 0 -- 
+//  expthres2 = (1-(SIN(1.4-(slider27/60+1)*1.6)*1.016)^4)^4; // gain2 curve for thres2hold, 0 -- 
+  expthres2 = (SIN((slider27/60+1)*1.6)*1.002)^10;
+//  exprat2 = 1.05-(ratio2-(1/3))/(2/3); //multiplier, linear 0 -- 1.
+  exprat2 = (slider24+1) * 0.95; //multiplier, linear 0 -- 1.
+//  t_attack2 = ((slider24+1)^1.2 *0.9) * ((-slider27/60)^0.7+1.0);
+  t_attack2 = ((slider24+1)^1.2 *1.3) + ((-slider27/100)^0.7+0.3)/5 - freq2/28000;
+  t_sustain2 = ((slider24+1)^1 * (-2));
+  expgain2 = 1- (exprat2) * (1-expthres2);
+//  t_sustain2 = -1;
+//  t_meterbase2 = 1;
+  ):(
+  expgain2 = 1;
+  t_attack2 = t_sustain2 = 0;
+  t_meter2 = 1;
+  attime2 = min(50,  max(  (slider26/20+0.55)*autoatt2 + (slider26/2-6) , 0.5 )   )/1000 ;  
+
+  opto2 ? (
+    reltime2_ = ( 1/((1-grv2^0.8+0.25)^2.5) ) *0.2*slider25 /1000;
+    ):(
+    reltime2_ = (slider25) /1000;
+    );
+
+  reltime2 = max( 0.010 , reltime2_ + autorele2/1000);
+
+  );  
+
+
+atcoef2=exp(-1/(attime2 * srate));
+relcoef2=exp(-1/(reltime2 * srate));
+
+//ratio2 == 12 ? (allin2=1; cratio2=20;) : (allin2=0; cratio2 = ratio2;);
+cthresh2 = (softknee2 ? (thresh2 -3) : thresh2);
+cthreshv2 = exp(cthresh2 * db2log);
+makeup2 = 0;
+makeupv2 = exp((makeup2+autogain2) * db2log);
+//  attime2 = slider26 / 1000;
+//  attime2 = max(0.0005, 
+//    min(0.05, ((slider26)/33+0.0485) * autoatt2 + (slider26/50*0.005 - 0.001) ) );
+
+
+
+
+
+//  hardclip = 1;
+/*
+  attime2 = 0.002;
+  reltime2 = 0.0385 - log10(freq2)* 0.009;
+
+  grv2 = max(coospl02 - bpinl2 , coospl12 - bpinr2);
+  );
+*/
+
+
+
+
+
+
+////////////// MODESSER:
+
+
+c = ( 1 / tan( $pi*freq / srate ) );
+a2 = 1 + c*(c+dampening);
+fa1 = 2 * (1 - c*c) / a2;
+fa0 = (1 + c*(c-dampening)) / a2;
+fk = c*dampening / a2;
+
+c2 = ( 1 / tan( $pi*freq2 / srate ) );
+a22 = 1 + c2*(c2+dampening2);
+fa12 = 2 * (1 - c2*c2) / a22;
+fa02 = (1 + c2*(c2-dampening2)) / a22;
+fk2 = c2*dampening2 / a22;
+
+
+
+
+//hardclip = 0;
+
+
+
+
+
+
+
+
+@sample
+
+
+
+
+
+
+
+
+
+inl = inl2 = bpinl = bpinl2 = spl0;
+inr = inr2 = bpinr = bpinr2 = spl1;
+
+
+//////// MODESSER:
+
+// Nobody uses?
+scv = max(abs(spl2),abs(spl3));
+inv = max(abs(spl0),abs(spl1));
+
+  
+
+
+
+
+
+
+//// BAND PASS FILTER
+
+
+d0_l = fk*bpinl - (fa1*fd1_l + fa0*fd2_l);
+d0_r = fk*bpinr - (fa1*fd1_r + fa0*fd2_r);
+bpoutl = (d0_l - fd2_l);
+bpoutr = (d0_r - fd2_r);
+fd2_l = fd1_l;
+fd2_r = fd1_r;
+fd1_l = d0_l;
+fd1_r = d0_r;
+
+
+steep1 == 1 ? (
+
+  d0_l_ = fk*bpoutl - (fa1*fd1_l_ + fa0*fd2_l_);
+  d0_r_ = fk*bpoutr - (fa1*fd1_r_ + fa0*fd2_r_);
+  bpoutl_ = d0_l_ - fd2_l_;
+  bpoutr_ = d0_r_ - fd2_r_;
+  fd2_l_ = fd1_l_;
+  fd2_r_ = fd1_r_;
+  fd1_l_ = d0_l_;
+  fd1_r_ = d0_r_;
+
+  bpoutl = (bpoutl_ + bpoutl ) /2;
+  bpoutr = (bpoutr_ + bpoutr ) /2;
+
+  );
+
+cospl0 =  bpoutl;
+cospl1 =  bpoutr;
+
+bypass1 == 0 ? (
+
+  cospl0 *= band1in;
+  cospl1 *= band1in;
+  );
+
+
+
+//bpoutl = (d0_l - fd2_l);
+//bpoutl -= bpinl;
+//bpoutl = bpinl - (d0_l - fd2_l);
+
+
+
+
+
+
+
+ 
+
+ 
+
+ // OPERATION MODES & METERS, BEFORE COMPRESSOR
+mode1 < 1 ? (
+//  cospl0 = cospl0;
+//  cospl1 = cospl1;
+  bpv = max( abs(cospl0) , abs(cospl1) );
+  ):(
+  mode1 < 2 ? (         //  Mid
+    bpv = abs( (cospl0 + cospl1)/2 );
+    cospl0 = (cospl0 + cospl1)/2 * (1-blend1) + blend1*cospl0;
+    cospl1 = (cospl1 + cospl0)/2 * (1-blend1) + blend1*cospl1;
+    ):(
+    mode1 < 3 ? (         // Side
+      bpv = ( (cospl0 - cospl1) );
+      cospl0 = cospl0 - blend1* (cospl0 + cospl1)/2;
+      cospl1 = cospl1 - blend1* (cospl1 + cospl0)/2;
+      ):(
+      mode1 < 4 ? (
+        bpv = abs(cospl0);
+        cospl0 = cospl0; cospl1 = (1-blend1) * cospl1;
+        ):(
+        mode1 < 5 ? (
+          bpv = abs(cospl1);
+          cospl1 = cospl1; cospl0 = (1-blend1) * cospl0;
+          );
+        );
+      );
+    );
+  );
+
+
+
+
+
+
+
+
+ /*
+ 
+ bpvl = abs(cospl0);
+ bpvr = abs(cospl1);
+ bpv_scl = abs(bpoutl_sc);
+ bpv_scr = abs(bpoutr_sc);
+ 
+ 
+ bpv2 = max( abs(cospl0) , abs(cospl1) );
+ bpv_sc2 = max(abs(bpoutl_sc2),abs(bpoutr_sc2));
+ */    
+ 
+ 
+
+
+//// 1175 COMPRESSOR
+
+//  cospl0 = bpoutl;
+//  cospl1 = bpoutr;
+  aspl0 = abs(cospl0);
+  aspl1 = abs(cospl1);
+  maxspl = max(aspl0, aspl1);
+  maxspl = maxspl * maxspl;
+  runave = maxspl + rmscoef * (runave - maxspl);
+  det = sqrt(max(0,runave));
+
+/*
+// 1176:
+// overdb = max( log(maxspl_1) * log2db - thresh , 0 );
+// overdb = max( 10*log10(maxspl_1) - thresh , 0 );
+
+//  overdb = max(0, 20*log10(det-cthreshv) * log2db );
+//  overdb2 = 10*log10(det);
+
+// mrelwood:
+//  overdb = max(0, 2.08136898 * log(det/(cthreshv^2)) *2.13-2);
+// Orig:
+  overdb_ = 2.08136898 * log(det/cthreshv) * log2db;
+// mrelwood compensation
+  overdb = overdb_^0.83;
+////////
+*/
+
+
+
+
+// FAIR:
+  overdb = log(det/threshv) * log2db;
+
+
+// Runave = maxspl on sine wave, both 3dB too low. "det" is the actual v.
+
+
+  overdb = max(0,overdb);
+
+//  overdb - rundb > 5 ? (averatio = 4;);
+
+  overdb > rundb ? (
+    rundb = overdb + atcoef * (rundb - overdb);
+//    runratio = averatio + ratatcoef * (runratio - averatio);
+    ) : (
+    rundb = overdb + relcoef * (rundb - overdb);
+//    runratio = averatio + ratrelcoef * (runratio - averatio);
+    );
+  overdb = max(rundb,0);
+//  averatio = runratio;
+
+cratio = 1 + (ratio-1) * sqrt((overdb + dcoffset) / (bias + dcoffset));
+
+
+/*
+  allin ? (
+    cratio = 12 + averatio;
+    ) : (
+    cratio = ratio;
+    );
+*/
+
+  ////////// ORIGINAL 1176 (Stillwell)
+//  gr = -overdb * (cratio-1)/cratio;
+
+  gr = -overdb * (cratio-1)/cratio;
+  grv = grv_meter = exp(gr * db2log);
+
+
+
+// SAMPLE TRANSIENT1
+t_gain = 1;
+
+slider14 > -1 ? (
+
+  t_maxSpls = max(abs(bpoutl),abs(bpoutr));
+  t_env1 = sqrt(t_tmpEnv1 = t_a0Env1*t_maxSpls - t_b1Env1*t_tmpEnv1);
+  t_env2 = sqrt(t_tmpEnv2 = t_a0Env2*t_maxSpls - t_b1Env2*t_tmpEnv2);
+  t_env3 = sqrt(t_tmpEnv3 = t_a0Env3*t_maxSpls - t_b1Env3*t_tmpEnv3);
+
+  t_gain = exp(log(max(t_env2/t_env1,1))*t_attack) * exp( log( max(t_env3/t_env1,1))*t_sustain);
+
+
+// EXPANDER1 METERING
+
+
+//  grv_meter = 1- (1-expv_meter + 1-tv_meter ) ;
+//  grv_meter = 1- (t_meterbase - t_meter*t_meterbase) ;
+//  gr_meter = t_meterbase;
+
+//  t_meter = (1/t_gain + t_meterbase )2;
+
+  t_meter = 1-  (1- (1/t_gain + t_meter*1)/2) * min(sc_meter*20 , 1)   ; //*1.2;
+//  t_meter =  (1/t_gain + t_meter*1)/2    ; //*1.2;
+
+//  exp_meter = ((1/grv)*1.1 + 0.3)/1.3;
+  exp_meter = (1/grv)*1.1 ;
+
+  t_meter *= min(1 , exp_meter);
+
+// ä
+
+//  gr_meter=1;
+//  gr_meter_decay = 1.0001;
+//  grv_meter < gr_meter ? gr_meter=grv_meter : ( gr_meter*=gr_meter_decay; gr_meter>1?gr_meter=1; );
+
+  t_meter > 2 ? t_meter = 2;
+  t_meter*(1.2-0.2) > (t_meterbase) ? (
+    t_meterbase += (t_meter-t_meterbase) * 0.00001 ;
+    ):(
+    t_meterbase -= (t_meterbase-t_meter) * 0.001 ; // sec recovery
+    );
+  
+  t_meterbase > 1 ? t_meterbase = 1;
+  t_meterbase < 0.4 ? t_meterbase = 0.4;
+
+
+  grv_meter = (t_meter) / (t_meterbase);
+  
+//  grv_meter = exp_meter;  // tmp
+
+// grv_meter = actual V // gr_meter = with decay  
+  
+//  ):(
+  
+//  grv_meter < gr_meter ? gr_meter=grv_meter : ( gr_meter*=gr_meter_decay; gr_meter>1?gr_meter=1; );
+
+  //  grv = 2^(grv)/6;
+
+
+  );
+
+
+/*
+//Not in FAIR
+  runmax = maxover + relcoef * (runmax - maxover);  // highest peak for setting att/rel decays in reltime
+  maxover = runmax;
+*/
+
+/*
+sc_meter_monopeak = max( abs(bpinl),abs(bpinr) );
+sc_meter = max( sc_meter_monopeak, ( abs(bpinl) + abs(bpinr) ) /2 );
+
+scv < gr_meter ? gr_meter=grv : ( gr_meter*=gr_meter_decay; gr_meter>1?gr_meter=1; );
+*/
+
+//hold = 1.05;
+
+// GR Meter hold
+
+  grv_meter < gr_meter ? (
+    gr_meter=grv_meter;
+    gr_dir = 1;
+    gr_hold = 0;
+
+    ) : (
+
+    gr_dir == -1 ? (
+      gr_meter *= gr_meter_decay ;
+      gr_hold = 0;
+      ) : (
+      gr_hold < srate* 0.1 * hold ? (
+        gr_hold += 1 ;
+        gr_dir = 0;
+        ) : (
+        gr_dir = -1 ;
+        gr_meter *= gr_meter_decay ;
+        );
+      );
+    );              
+
+gr_meter > 1 ? (
+  gr_meter=1;
+  gr_hold=0;
+);
+
+
+
+
+
+
+
+
+// SC Meter hold
+sc_meterv = bpv;
+
+
+sc_meter >= 1 ? ( sc_peak = 1 ) : ( sc_peak = 0); 
+
+
+  sc_meterv > sc_meter ? (
+  
+    sc_meter=sc_meterv;
+    sc_dir = 1;
+    sc_hold = 0;
+    sc_metercv = max(abs(coospl0),abs(coospl1));
+
+    ) : (
+
+    sc_dir == -1 ? (
+      sc_meter /= sc_decay ;
+      sc_hold = 0;
+      sc_metercv = (sc_metercv/(sc_decay-1)) * 0.6 + 1 ;
+      sc_metercv > 1 ? (sc_metercv = 1);
+      
+      ) : (
+      sc_hold < srate* 0.1 * hold ? (
+        sc_hold += 1 ;
+        sc_dir = 0;
+        ) : (
+        sc_dir = -1 ;
+        );
+      );
+    );              
+
+// OPERATION MODES (OUTPUT MIX)
+
+mode1 < 1 ? (   // Stereo
+  coospl0 = bpoutl;
+  coospl1 = bpoutr;
+  );
+mode1 >= 1 && mode1 < 2 ? (   //Middle
+  coospl0 = ((bpoutl + bpoutr )/2) * (1-blend1) + blend1*bpoutl;
+  coospl1 = ((bpoutr + bpoutl )/2) * (1-blend1) + blend1*bpoutr;
+  ); 
+mode1 >= 2 && mode1 < 3 ? (
+  coospl0 = ((bpoutl - bpoutr)/2) * (1-blend1) + blend1*bpoutl;
+  coospl1 = ((bpoutr - bpoutl)/2) * (1-blend1) + blend1*bpoutr;
+  );
+mode1 >= 3 && mode1 < 4 ? (
+  coospl0 = bpoutl;
+  coospl1 = blend1*bpoutr;
+  );
+mode1 >= 4 && mode1 < 5 ? (
+  coospl0 = blend1*bpoutl;;
+  coospl1 = bpoutr;
+  );
+
+
+
+bypass1 == 1 ? (
+  coospl0 = coospl1 = 0;
+  gr_meter = 1;
+  );
+
+
+solo1 ? (
+//  spl0 = coospl0 *band1in*grv*gain*t_gain*expgain;
+//  spl1 = coospl1 *band1in*grv*gain*t_gain*expgain;
+
+  spl0 = coospl0 *band1in*grv*gain*t_gain*expgain;
+  spl1 = coospl1 *band1in*grv*gain*t_gain*expgain;
+
+  bypass1 ? (
+    spl0 = bpoutl;
+    spl1 = bpoutr;
+    );
+    
+  mouse_cap && cap_mode == 0 ? (
+    mouse_x < field1xa - but_h/2 || mouse_x > field1xb + but_h/2 ? (
+      solofftimer += 1;
+      solofftimer > 100 ? (
+        slider35 = 0;
+        slider_automate(slider35);
+        );
+      ):(
+      solofftimer = 0;
+      );
+    );
+  ):(
+  spl0 = bpinl - coospl0 + coospl0 *band1in*grv*gain*t_gain*expgain;
+  spl1 = bpinr - coospl1 + coospl1 *band1in*grv*gain*t_gain*expgain;
+  );
+
+
+
+
+
+
+
+
+
+
+
+// BAND PASS FILTER 2
+
+d0_l2 = fk2*bpinl2 - (fa12*fd1_l2 + fa02*fd2_l2);
+d0_r2 = fk2*bpinr2 - (fa12*fd1_r2 + fa02*fd2_r2);
+bpoutl2 = (d0_l2 - fd2_l2);
+bpoutr2 = (d0_r2 - fd2_r2);
+fd2_l2 = fd1_l2;
+fd2_r2 = fd1_r2;
+fd1_l2 = d0_l2;
+fd1_r2 = d0_r2;
+
+
+steep2 == 1 ? (
+
+
+  d0_l2_ = fk2*bpoutl2 - (fa12*fd1_l2_ + fa02*fd2_l2_);
+  d0_r2_ = fk2*bpoutr2 - (fa12*fd1_r2_ + fa02*fd2_r2_);
+  bpoutl2_ = (d0_l2_ - fd2_l2_);
+  bpoutr2_ = (d0_r2_ - fd2_r2_);
+  fd2_l2_ = fd1_l2_;
+  fd2_r2_ = fd1_r2_;
+  fd1_l2_ = d0_l2_;
+  fd1_r2_ = d0_r2_;
+
+
+  bpoutl2 = (bpoutl2_ + bpoutl2 ) /2;
+  bpoutr2 = (bpoutr2_ + bpoutr2 ) /2;
+  );
+
+cospl02 =  bpoutl2;
+cospl12 =  bpoutr2;
+
+bypass2 == 0 ? (
+
+  cospl02 *= band2in;
+  cospl12 *= band2in;
+  );
+
+
+
+
+
+
+bpinl2b = spl0;
+bpinr2b = spl1;
+  
+
+// BAND PASS FILTER 2b (For BandPass to be processed, post FX1)
+
+d0_l2b = fk2*bpinl2b - (fa12*fd1_l2b + fa02*fd2_l2b);
+d0_r2b = fk2*bpinr2b - (fa12*fd1_r2b + fa02*fd2_r2b);
+bpoutl2b = (d0_l2b - fd2_l2b);
+bpoutr2b = (d0_r2b - fd2_r2b);
+fd2_l2b = fd1_l2b;
+fd2_r2b = fd1_r2b;
+fd1_l2b = d0_l2b;
+fd1_r2b = d0_r2b;
+
+
+steep2 == 1 ? (
+
+
+  d0_l2b_ = fk2*bpoutl2b - (fa12*fd1_l2b_ + fa02*fd2_l2b_);
+  d0_r2b_ = fk2*bpoutr2b - (fa12*fd1_r2b_ + fa02*fd2_r2b_);
+  bpoutl2b_ = (d0_l2b_ - fd2_l2b_);
+  bpoutr2b_ = (d0_r2b_ - fd2_r2b_);
+  fd2_l2b_ = fd1_l2b_;
+  fd2_r2b_ = fd1_r2b_;
+  fd1_l2b_ = d0_l2b_;
+  fd1_r2b_ = d0_r2b_;
+
+
+  bpoutl2b = (bpoutl2b_ + bpoutl2b ) /2;
+  bpoutr2b = (bpoutr2b_ + bpoutr2b ) /2;
+  );
+
+
+
+
+
+
+
+
+
+mode2 < 1 ? (
+//  cospl02 = cospl02;
+//  cospl12 = cospl12;
+  bpv2 = max( abs(cospl02) , abs(cospl12) );
+  ):(
+  mode2 < 2 ? (
+    bpv2 = abs( (cospl02 + cospl12)/2 );
+    cospl02 = (cospl02 + cospl12)/2 * (1-blend2) + blend2*cospl02;
+    cospl12 = (cospl12 + cospl02)/2 * (1-blend2) + blend2*cospl12;
+    ):(
+    mode2 < 3 ? (
+      bpv2 = ( (cospl02 - cospl12) );
+      cospl02 = cospl02 - blend2 * (cospl02 + cospl12)/2;
+      cospl12 = cospl12 - blend2 * (cospl12 + cospl02)/2;
+      ):(
+      mode2 < 4 ? (
+        bpv2 = abs(cospl02);
+        cospl02 = cospl02; cospl12 = (1-blend2) * cospl12;
+        ):(
+        mode2 < 5 ? (
+          bpv2 = abs(cospl12);
+          cospl12 = cospl12; cospl02 = (1-blend2) *cospl02;
+          );
+        );
+      );
+    );
+  );
+
+
+
+/////// COMPRESSOR 2
+
+  aspl02 = abs(cospl02);
+  aspl12 = abs(cospl12);
+  maxspl2 = max(aspl02, aspl12);
+  maxspl2 = maxspl2 * maxspl2;
+  runave2 = maxspl2 + rmscoef2 * (runave2 - maxspl2);
+  det2 = sqrt(max(0,runave2));
+  
+/*
+// Orig:
+  overdb_2 = 2.08136898 * log(det2/cthreshv2) * log2db;
+// mrelwood compensation
+  overdb2 = overdb_2^0.83;
+*/
+
+// FAIR:
+  overdb2 = log(det2/threshv2) * log2db;
+
+
+  overdb2 = max(0,overdb2);
+  
+//  overdb2 - rundb2 > 5 ? (averatio2 = 4;);
+  overdb2 > rundb2 ? (
+    rundb2 = overdb2 + atcoef2 * (rundb2 - overdb2);
+//    runratio2 = averatio2 + ratatcoef2 * (runratio2 - averatio2);
+  ) : (
+    rundb2 = overdb2 + relcoef2 * (rundb2 - overdb2);
+//    runratio2 = averatio2 + ratrelcoef2 * (runratio2 - averatio2);
+  );
+  overdb2 = max(0,rundb2);
+  
+/*  
+  averatio2 = runratio2;
+
+  allin2 ? (
+    cratio2 = 12 + averatio2;
+  ) : (
+    cratio2 = ratio2;
+  );
+*/
+
+  cratio2 = 1 + (ratio2-1) * sqrt((overdb2 + dcoffset2) / (bias2 + dcoffset2));
+
+
+  ////////// ORIGINAL 1176 (Stillwell)   2
+//  gr = -overdb * (cratio-1)/cratio;
+  gr2 = -overdb2 * (cratio2-1)/cratio2;
+grv2 = grv_meter2 = exp(gr2 * db2log);
+//  grv = 2^(grv)/6;
+
+
+// SAMPLE TRANSIENT2
+t_gain2 = 1;
+
+slider24 > -1 ? (
+  t_maxSpls2 = max(abs(bpoutl2),abs(bpoutr2));
+  t_env12 = sqrt(t_tmpEnv12 = t_a0Env12*t_maxSpls2 - t_b1Env12*t_tmpEnv12);
+  t_env22 = sqrt(t_tmpEnv22 = t_a0Env22*t_maxSpls2 - t_b1Env22*t_tmpEnv22);
+  t_env32 = sqrt(t_tmpEnv32 = t_a0Env32*t_maxSpls2 - t_b1Env32*t_tmpEnv32);
+  
+  t_gain2 = exp(log(max(t_env22/t_env12,1))*t_attack2) * exp( log( max(t_env32/t_env12,1))*t_sustain2);
+  
+
+// EXPANDER2 METERING
+
+
+// grv_meter2 = expv2 : grv_meter2 = grv2;
+
+  t_meter2 = 1-  (1- (1/t_gain2 + t_meter2*1)/2) * min(sc_meter2*20 , 1)   ; //*1.2;
+  exp_meter2 = (1/grv2)*1.1 ;
+  
+  t_meter2 *= min(1 , exp_meter2);
+
+//  gr_meter_decay = 1.0001;
+  t_meter2 > 2 ? t_meter2 = 2;
+  t_meter2*(1.2-0.2) > (t_meterbase2) ? (
+    t_meterbase2 += (t_meter2-t_meterbase2) * 0.00001 ;
+    ):(
+    t_meterbase2 -= (t_meterbase2-t_meter2) * 0.001 ; // sec recovery
+    );
+  
+  t_meterbase2 > 1 ? t_meterbase2 = 1;
+  t_meterbase2 < 0.4 ? t_meterbase2 = 0.4;
+
+  grv_meter2 = (t_meter2) / (t_meterbase2);
+  
+
+
+  );
+
+
+
+  runmax2 = maxover2 + relcoef2 * (runmax2 - maxover2);  // highest peak for setting att/rel decays in reltime
+  maxover2 = runmax2;
+
+//  grv2 < gr_meter2 ? gr_meter2=grv2 : ( gr_meter2*=gr_meter_decay2; gr_meter2>1?gr_meter2=1; );
+
+
+// GR Meter 2 hold
+
+  grv_meter2 < gr_meter2 ? (
+    gr_meter2=grv_meter2;
+    gr_dir2 = 1;
+    gr_hold2 = 0;
+
+    ) : (
+
+    gr_dir2 == -1 ? (
+      gr_meter2 *= gr_meter_decay2 ;
+      gr_hold2 = 0;
+      ) : (
+      gr_hold2 < srate* 0.1 * hold2 ? (
+        gr_hold2 += 1 ;
+        gr_dir2 = 0;
+        ) : (
+        gr_dir2 = -1 ;
+        gr_meter2 *= gr_meter_decay2 ;
+        );
+      );
+    );              
+
+gr_meter2 > 1 ? (
+  gr_meter2=1;
+  gr_hold2=0;
+);
+
+
+
+// SC Meter 2 hold
+sidechain2 == 1 ? (
+  sc_meterv2 = bpv_sc2;
+  ) : (
+  sc_meterv2 = bpv2;
+  );
+
+sc_meter2 >= 1 ? ( sc_peak2 = 1 ) : ( sc_peak2 = 0); 
+
+
+  sc_meterv2 > sc_meter2 ? (
+  
+    sc_meter2=sc_meterv2;
+    sc_dir2 = 1;
+    sc_hold2 = 0;
+    sc_metercv2 = max(abs(coospl02),abs(coospl12));
+
+    ) : (
+
+    sc_dir2 == -1 ? (
+      sc_meter2 /= sc_decay2 ;
+      sc_hold2 = 0;
+      sc_metercv2 = (sc_metercv2/(sc_decay2-1)) * 0.6 + 1 ;
+      sc_metercv2 > 1 ? (sc_metercv2 = 1);
+      
+      ) : (
+      sc_hold2 < srate* 0.1 * hold2 ? (
+        sc_hold2 += 1 ;
+        sc_dir2 = 0;
+        ) : (
+        sc_dir2 = -1 ;
+        );
+      );
+    );              
+
+
+
+
+
+
+
+
+// EXPANDER
+
+//slider14 > 1 ? (
+//  gain = t_gain; // "gain" = Transient Controller multiplier
+  
+
+//  expand = 1- (( (slider14/2)+0.5) *2)   * (1-  (sin(threshv*1.5)*1.0025)^1.8  );
+//  expand = 1- (( (slider14/2)+0.5) *2)   * (((1-threshv)^3*(-1)+1)^3);
+
+
+// Move to block:  
+//  expthres = ( (1-threshv)^4 * (-1) +1)^3  ; // gain multiplier for expander (thr0) 1--0
+//  expthres2 = ( (1-threshv2)^2.5 * (-1) +1)^2  ; //
+
+
+//  grv *= expthres;
+//  grv *= (1- (1-expthres) * exprat) * t_gain;
+// grv *= t_gain;
+/*
+coospl0 = slider52 * (sin(bpoutl*1.8)*1.005)^1;
+coospl1 = slider52 * (sin(bpoutr*1.8)*1.005)^1;
+
+bpoutl = slider53 * 1-(1- SIN((bpoutl*1.5)^1.4)^2);
+bpoutr = slider53 * 1-(1- SIN((bpoutr*1.5)^1.4)^2);
+
+
+bpoutl = slider54 * (SIN(bpoutl*1.2)*1.073)^(1.5);
+bpoutr = slider54 * (SIN(bpoutr*1.2)*1.073)^(1.5);
+*/
+
+
+//  sincospl = ( sin(1-(maxspl))^2.5 * (-1) +1 )^2;
+  
+//  expand = 1 - exprat * expthres;
+
+//  expand = 1- (1 - (-slider14)^2)  * (1-  ((threshv))  );
+//  gain *= (expand + slider17*0);
+//  hardclip = 1;
+ 
+//  grv = max(coospl0 - bpinl , coospl1 - bpinr);
+
+//expv = 1-abs(bpoutl - grv);
+
+//  );
+
+//  exp_grv = spl-
+//  );
+
+//exptest += 1*(ratio+1);
+
+
+solo2 == 0 ? (
+  bpoutl2 = bpoutl2b;
+  bpoutr2 = bpoutr2b;
+  );
+
+// OPERATION MODES 2 (OUTPUT MIX 2)
+
+mode2 < 1 ? (
+  coospl02 = bpoutl2;
+  coospl12 = bpoutr2;
+  );
+mode2 >= 1 && mode2 < 2 ? (
+  coospl02 = ((bpoutl2 + bpoutr2 )/2) * (1-blend2) + blend2*bpoutl2;
+  coospl12 = ((bpoutr2 + bpoutl2 )/2) * (1-blend2) + blend2*bpoutr2;
+  ); 
+mode2 >= 2 && mode2 < 3 ? (
+  coospl02 = ((bpoutl2 - bpoutr2)/2) * (1-blend2) + blend2*bpoutl2;
+  coospl12 = ((bpoutr2 - bpoutl2)/2) * (1-blend2) + blend2*bpoutr2;
+  );
+mode2 >= 3 && mode2 < 4 ? (
+  coospl02 = bpoutl2;
+  coospl12 = blend2*bpoutr2;
+  );
+mode2 >= 4 && mode2 < 5 ? (
+  coospl02 = blend2*bpoutl2;
+  coospl12 = bpoutr2;
+  );
+
+/*
+bypass1 == 1 ? (
+  bpoutl = bpoutr = 0;
+  gr_meter = 1;
+  );
+
+bypass2 == 1 ? (
+  bpoutl2 = bpoutr2 = 0;
+  gr_meter2 = 1;
+  );  
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bypass2 == 1 ? (
+  coospl02 = coospl12 = 0;
+  gr_meter2 = 1;
+  );  
+
+
+
+
+mouse_cap && cap_mode == 35 ? ( // Solo1
+  slider36 = 0;
+  slider_automate(slider36);
+  );
+mouse_cap && cap_mode == 36 ? (
+  slider35 = 0;
+  slider_automate(slider35);
+  );
+
+
+
+
+    
+solo2 ? (
+  spl0 = coospl02 *band2in*grv2*gain2*t_gain2*expgain2;
+  spl1 = coospl12 *band2in*grv2*gain2*t_gain2*expgain2;
+  bypass2 ? (
+    spl0 = bpoutl2;
+    spl1 = bpoutr2;
+    );
+  mouse_cap && cap_mode == 0 ? (
+    mouse_x < field2xa - but_h/2 || mouse_x > field2xb + but_h/2 ? (
+      solofftimer += 1;
+      solofftimer > 100 ? (
+        slider36 = 0;
+        slider_automate(slider36);
+        );
+      ):(
+      solofftimer = 0;
+      );
+    );
+  ):(
+  
+  solo1 == 0 ? (
+    spl0 = bpinl2b - coospl02 + coospl02 *band2in*grv2*gain2*t_gain2*expgain2 ;
+    spl1 = bpinr2b - coospl12 + coospl12 *band2in*grv2*gain2*t_gain2*expgain2 ;
+    );
+
+  );  
+
+
+
+
+
+
+
+////////////// MASTER LIMITER ///////////////////
+
+lim_r = exp(-3/(srate*max(  0  ,0.005)));
+
+
+lim_maxSpls=max(abs(spl0),abs(spl1));
+
+(lim_r1Timer+=1) > lim_HOLDTIME ? (lim_r1Timer = 0; lim_max1Block = 0; );
+lim_max1Block = max(lim_max1Block,lim_maxSpls);
+(lim_r2Timer+=1) > lim_HOLDTIME ? (lim_r2Timer = 0; lim_max2Block = 0; );
+lim_max2Block = max(lim_max2Block,lim_maxSpls);
+
+lim_envT = max(lim_max1Block,lim_max2Block);
+
+lim_env = lim_env < lim_envT ? lim_envT : lim_envT + lim_r*(lim_env-lim_envT);
+
+(lim_env > lim_thresh) ?
+  lim_gain = (lim_g_meter=(lim_thresh / lim_env))*lim_volume :
+  (lim_g_meter=1; lim_gain=lim_volume;);
+
+spl0*=lim_gain;
+spl1*=lim_gain;
+
+
+///////////////////////////////////
+  
+
+
+
+
+//////// MODALYZER:
+
+modeana <1 ? (
+  outl = spl0;
+  outr = spl1;
+  ); 
+modeana >= 1 && modeana < 2 ? ( 
+  outl = spl0 - (spl0-spl1);
+  outr = spl1 - (spl1-spl0);
+//  outl = outr = spl0+spl1 - (spl0-spl1);
+  );
+modeana >= 2 && modeana < 3 ? (   
+  outl = (spl0 - spl1) ;
+  outr = 0;
+//  outr = (spl0 - spl1) ;
+  );
+modeana >= 3 && modeana < 4 ? (   
+  outl = outr = spl0;
+  );
+modeana >= 4 && modeana < 5 ? (   
+  outl = outr = spl1;
+  );
+
+outl *= roofgain;  
+outr *= roofgain;  
+ 
+ 
+
+slider10 == 0 ? (          //Analyzer OFF 
+  recpos = 0 ;
+
+  ):(
+  abs(recpos[]=outl+outr) > minvol ? update=1;
+  recpos = ((recpos+1) >= histsize ? 0 : (recpos+1));
+  );
+
+
+
+
+@gfx 550*gfx_ext_retina 250*gfx_ext_retina // request horizontal/vertical heights (0 means dont care)
+
+showothers > 0 ? gfx_h2 = gfx_h-but_h : gfx_h2 = gfx_h;
+
+old_srate == 0 ? old_srate = srate;
+
+
+// Sliders are also here for graphics to function while bypassed
+srate == 0 ? (
+
+  modeana = slider8;
+  
+  //freq = slider11;
+  width = slider12;   
+  thresli1 = slider17;
+  ratio = -slider14;
+  //attack = slider16;
+  //release = slider15;
+  gain1sli = slider13;
+  bypass1 = slider18;
+  steep1 = slider19;
+  band1insli = slider20;
+  mode1 = slider31;
+  opto1 = slider32;
+  //blend1 = slider53;
+  
+  freq2 = slider21;
+  width2 = slider22;
+  thresli2 = slider27;
+  ratio2 = -slider24;
+  attack2 = slider26;
+  release2 = slider25;
+  gain2sli = slider23;
+  bypass2 = slider28;
+  steep2 = slider29;
+  band2in = slider30;
+  mode2 = slider41;
+  opto2 = slider42;
+  //blend2 = slider54;
+  
+  blend1sli = slider33;
+  blend2sli = slider34;
+  
+  solo1 = slider35;
+  solo2 = slider36;
+  
+  
+  slider2o = -slider2;
+  
+  //slider2 != lfloor ? old_w=0;
+  //slider2o != lfloor ? old_w=0;
+  
+  //slope = slider6;
+  roof = slider7;
+  chanslid = slider51;
+    
+  );
+
+threshv_gfx = exp(thresh * db2log);
+threshv2_gfx = exp(thresh2 * db2log);
+
+
+
+
+gfx_ext_retina>1 ? (
+  font = "Arial";
+  gfx_setfont(1,font,12*gfx_ext_retina,'');
+  ) : (
+  gfx_setfont(1,font,16,'b');
+  );
+
+
+
+
+function draw_button(xp, yp, str) 
+  instance(w,h,x,y) 
+  globals(gfx_r,gfx_g,gfx_b,gfx_x,gfx_y) 
+(
+  gfx_measurestr(str, w, h);
+  xp -= w+3;
+  x=xp;
+  y=yp;
+  //                                          GRAPH BUTTON BACKGROUND COLOR
+  gfx_set(0.0, 0.05, 0.1, 1);
+//  gfx_set(0, 0, 0, 1);
+  w+=3;
+  h+=3;
+  gfx_rect(x,y,w,h);
+  //                                          GRAPH BUTTON rectangle COLOR
+  gfx_set(0.85, 0.85, 1, 0.5);
+  gfx_line(x,y,x+w,y);
+  gfx_line(x+w,y,x+w,y+h);
+  gfx_line(x,y+h,x+w,y+h);
+  gfx_line(x,y,x,y+h);
+  h+=1;
+  w+=1;
+  gfx_x=xp+2; gfx_y=yp+2;
+  //                                          GRAPH BUTTON TEXT COLOR
+  gfx_set(0.8, 0.8, 0.8, 0.9);
+  gfx_drawstr(str);
+  gfx_x = xp;
+);
+
+function hit_button(xp,yp,cm) 
+  instance(w,h,x,y) 
+  globals(cap_mode, cap_last_x, cap_last_y) 
+( 
+  xp>=x&&yp>=y&&xp<x+w&&yp<y+h ? (
+    cap_last_x = xp;
+    cap_last_y = yp;
+    cap_mode=cm;
+  );
+);
+
+function drag_slider(x, y, z, dx)
+  globals(mouse_y, cap_last_y, cap_drag)
+(
+  x = min( max(x + dx * (cap_last_y-mouse_y),y) ,z);
+  cap_last_y=mouse_y;
+  cap_drag=1;
+  x;
+);
+
+function drag_slider_horiz(x, y, z, dx)
+  globals(mouse_x, cap_last_x, cap_drag)
+(
+  x = min( max(x + dx * (mouse_x-cap_last_x),y) ,z);
+  cap_last_x=mouse_x;
+  cap_drag=1;
+  x;
+);
+function drag_slider_xory(x, y, z, dx)
+  globals(mouse_x, cap_last_x, mouse_y, cap_last_y, cap_drag)
+(
+  x = min( max(x + dx * (mouse_x-cap_last_x + cap_last_y-mouse_y),y) ,z);
+  cap_last_x=mouse_x;
+  cap_last_y=mouse_y;
+  cap_drag=1;
+  x;
+);
+
+function drag_slider_precise(x, y, z, dx)
+  globals(mouse_cap)
+(
+  (mouse_cap & 4) ? dx *= 0.1;
+  drag_slider(x, y, z, dx);
+);
+
+function drag_slider_horiz_precise(x, y, z, dx)
+  globals(mouse_cap)
+(
+  (mouse_cap & 4) ? dx *= 0.1;
+  drag_slider_horiz(x, y, z, dx);
+);
+
+function drag_slider_xory_precise(x, y, z, dx)
+  globals(mouse_cap)
+(
+  (mouse_cap & 4) ? dx *= 0.1;
+  drag_slider_xory(x, y, z, dx);
+);
+
+function cycle_slider(x, y, z, dx)
+  globals(last_mouse_cap)
+(
+  (last_mouse_cap & 16) ? x -= dx : x += dx;
+  y > z ? ( dx=y; y=z; z=dx; );
+  x > z ? y : x < y ? z : x;
+);
+
+
+
+slider5 > 1000 && slider5 < 5000 ? (
+  s5timer1 > 60 ? (
+    slider5 = floor(slider5/100)*100;
+    slider_automate(slider5);
+    s5timer1 = 0;
+    ) : (
+    s5timer1 += 1;
+    );
+  );
+
+slider5 > 5000 ? (
+  s5timer5 > 60 ? (
+    slider5 = floor(slider5/1000)*1000;
+    slider_automate(slider5);
+    s5timer5 = 0;
+    ) : (
+    s5timer5 += 1;
+    );
+  );
+
+
+
+(mouse_cap & 1) ? (
+  !(last_mouse_cap & 1) ? (
+//    (cap_mode == 1||cap_mode == 4||cap_mode == 6||cap_mode == 11) && !cap_drag &&cap_timer < 12 ? (
+    (cap_mode >= 1) && !cap_drag &&cap_timer < 12 ? (
+       cap_mode == 1 ? (
+         slider2 = 79;    // FLOOR
+         slider_automate(slider2);
+         );
+      cap_mode == 3 ? (
+         slider1 = 3;    // FFT SIZE
+         slider_automate(slider1);
+         );
+       cap_mode == 4 ? (  // INTEGRATION TIME
+         slider5 = 1000;
+         slider_automate(slider5);
+         );
+       cap_mode == 5 ? (  // SLOPE
+         slider6 = 3;
+         slider_automate(slider6);
+         );
+       cap_mode == 6 ? (  // ROOF
+         slider7 = 2;
+         slider_automate(slider7);       
+         );
+/*
+       cap_mode == 8 ? (
+         slider8 = 0;
+         slider_automate(slider8);       
+         );
+*/       
+       cap_mode == 9 ? (  // HELP
+         slider9 = 1;
+         slider_automate(slider9);       
+         );
+
+
+       cap_mode == 10 ? (  // ANALYZER ON/OFF
+         slider10 = 1;
+         slider_automate(slider10);       
+         );
+ 
+ // BAND 1
+      cap_mode == 11 ? (
+        slider11 = 300;
+//        slider_automate(slider11);   // Frequ
+        );
+      cap_mode == 12 ? (
+        slider12 = 2;
+        slider_automate(slider12);   // Width
+        );
+      cap_mode == 13 ? (
+        slider17 = -6;
+        slider_automate(slider17);  // Thresh
+        );
+      cap_mode == 14 ? (
+//        (mouse_y > gfx_h/722*208) && (mouse_y < gfx_h/722*252) ? slider14 = -1:
+        slider14 = -1;
+        slider_automate(slider14);  // Ratio
+        );
+      cap_mode == 15 ? (
+        slider16 = 12.187;
+        slider_automate(slider16);  // Attack
+        );
+      cap_mode == 16 ? (
+        slider15 = 25.68;
+        slider_automate(slider15);  // Release
+        );
+      cap_mode == 17 ? (
+        slider13 = 0;
+        slider_automate(slider13);  // Gain
+        );
+      cap_mode == 20 ? (
+        slider20 = 0;
+        slider_automate(slider20);  // Band 1 in
+        );
+
+/*
+      cap_mode == 31 ? (
+        slider31 = 0;
+        slider_automate(slider31);  // Band 1mode
+        );
+*/
+        
+        
+// BAND 2:
+      cap_mode == 21 ? (
+        slider21 = 3000;
+//        slider_automate(slider21);   // Frequ 2
+        );
+      cap_mode == 22 ? (
+        slider22 = 2;
+        slider_automate(slider22);   // Width 2
+        );
+      cap_mode == 23 ? (
+        slider27 = -6;
+        slider_automate(slider27);  // Thresh 2
+        );
+      cap_mode == 24 ? (
+//        (mouse_y > gfx_h/722*208) && (mouse_y < gfx_h/722*252) ? slider24 = -1:
+        slider24 = -1;
+        slider_automate(slider24);  // Ratio 2 
+        );
+      cap_mode == 25 ? (
+        slider26 = 12.187;
+        slider_automate(slider26);  // Attack 2
+        );
+      cap_mode == 26 ? (
+        slider25 = 25.68;
+        slider_automate(slider25);  // Release 2
+        );
+      cap_mode == 27 ? (
+        slider23 = 0;
+        slider_automate(slider23);  // Gain 2
+        );
+      cap_mode == 30 ? (
+        slider30 = 0;
+        slider_automate(slider30);  // Band in 2
+        );
+/*
+      cap_mode == 41 ? (
+        slider41 = 0;
+        slider_automate(slider41);  // Band 2 mode
+        );
+*/      
+      cap_mode == 33 ? (
+        slider33 = 100;
+        slider_automate(slider33);  // Blend 1
+        );
+      cap_mode == 34 ? (
+        slider34 = 100;
+        slider_automate(slider34);  // Blend 2
+        );
+
+      cap_mode == 35 ? (
+        slider35 = 0;
+        slider_automate(slider35);  // Solo 1
+        );
+      cap_mode == 36 ? (
+        slider36 = 0;
+        slider_automate(slider36);  // Solo 2
+        );
+
+       cap_mode == 52 ? (  // SHOW OTHERS'
+         slider52 = 1;
+         slider_automate(slider52);       
+         );
+
+
+
+
+         cap_mode=0;
+         old_w=0;
+       ) : (
+         cap_mode = cap_drag = cap_timer = 0;
+         phase_button.hit_button(mouse_x,mouse_y,-1) ? (
+           slider3=!slider3;
+           slider_automate(slider3);
+           old_w = 0;
+         ) : (
+         help < 2 ? (
+           floor_button.hit_button(mouse_x,mouse_y,1)||
+           window_button.hit_button(mouse_x,mouse_y,2)||
+           fft_button.hit_button(mouse_x,mouse_y,3)||
+//           integrate_button.hit_button(mouse_x,mouse_y,4);
+           integrate_button.hit_button(mouse_x,mouse_y,4)||
+           slope_button.hit_button(mouse_x,mouse_y,5)||           
+           roof_button.hit_button(mouse_x,mouse_y,6)||
+           modeana_button.hit_button(mouse_x,mouse_y,8)||
+           help_button.hit_button(mouse_x,mouse_y,9)||
+           analoff_button.hit_button(mouse_x,mouse_y,10)||
+      freq_button.hit_button(mouse_x,mouse_y,11)||    // These seem to make the cap modes
+      width_button.hit_button(mouse_x,mouse_y,12)||
+      thresh_button.hit_button(mouse_x,mouse_y,13)||
+      ratio_button.hit_button(mouse_x,mouse_y,14)||
+      attack_button.hit_button(mouse_x,mouse_y,15)||
+      release_button.hit_button(mouse_x,mouse_y,16)||
+      gain_button.hit_button(mouse_x,mouse_y,17)||
+      bypass1_button.hit_button(mouse_x,mouse_y,18)||
+      steep1_button.hit_button(mouse_x,mouse_y,19)||
+      band1in_button.hit_button(mouse_x,mouse_y,20)||
+      mode1_button.hit_button(mouse_x,mouse_y,31)||
+      opto1_button.hit_button(mouse_x,mouse_y,32)||
+
+      blend1_button.hit_button(mouse_x,mouse_y,33)||
+      blend2_button.hit_button(mouse_x,mouse_y,34)||
+
+      solo1_button.hit_button(mouse_x,mouse_y,35)||
+      solo2_button.hit_button(mouse_x,mouse_y,36)||
+      
+      freq2_button.hit_button(mouse_x,mouse_y,21)||    // If overlapping, first ones ^^ get prior
+      width2_button.hit_button(mouse_x,mouse_y,22)||
+      thresh2_button.hit_button(mouse_x,mouse_y,23)||
+      ratio2_button.hit_button(mouse_x,mouse_y,24)||
+      attack2_button.hit_button(mouse_x,mouse_y,25)||
+      release2_button.hit_button(mouse_x,mouse_y,26)||
+      gain2_button.hit_button(mouse_x,mouse_y,27)||
+      bypass2_button.hit_button(mouse_x,mouse_y,28)||
+      steep2_button.hit_button(mouse_x,mouse_y,29)||
+      band2in_button.hit_button(mouse_x,mouse_y,30)||
+      mode2_button.hit_button(mouse_x,mouse_y,41)||
+      opto2_button.hit_button(mouse_x,mouse_y,42)||
+      channel_button.hit_button(mouse_x,mouse_y,51)||
+      
+      others_button.hit_button(mouse_x,mouse_y,52);
+      
+       );
+         );
+       );
+    );
+    cap_mode == 1 && cap_last_y != mouse_y ? (      // FLOOR
+      slider2 = drag_slider(slider2, 26, 171, slider2*0.004+0.07);
+      old_w=0;
+      slider_automate(slider2);
+
+    );
+    cap_mode == 2 && cap_last_y != mouse_y ? (    // FFT MODE
+      slider4 = drag_slider(slider4, 0.0, 3.0, .05);
+      old_w=0;
+      slider_automate(slider4);
+    );
+    cap_mode == 3 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (    // FFT SIZE
+//      slider1 = drag_slider(slider1, 0.0, 11.0, .03);
+      slider1 = drag_slider_xory(slider1, 0, 5, .03);
+      old_w=0;
+      slider_automate(slider1);
+    );
+
+
+// Band Modes
+
+    cap_mode == 31 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+      slider31 = drag_slider_xory(slider31, 0, 4, .02);
+      old_w=0;
+      slider_automate(slider31);
+    );
+    cap_mode == 41 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+      slider41 = drag_slider_xory(slider41, 0, 4, .02);
+      old_w=0;
+      slider_automate(slider41);
+    );
+
+
+
+    cap_mode == 4 && cap_last_y != mouse_y ? (
+
+//      slider5 = drag_slider_precise(slider5, 0.0, 2500.0, 5);
+//      slider5 < 100 ? ( slider5 = drag_slider_precise(slider5, 0.0, 10000, 2.5) ):
+
+
+      slider5 < 100 ? (
+        slider5 = drag_slider_precise(slider5, 0.0, 10000, 2.5);
+        ) : (
+        slider5 < 1000 ? (
+          slider5 = drag_slider_precise(floor(slider5/10)*10, 0.0, 10000, 5);
+          ) : (
+          slider5 >= 5000 ? (
+            slider5 = drag_slider_precise(slider5, 0.0, 10000, 50);
+            );
+          slider5 >= 3000 ? (
+            slider5 = drag_slider_precise(floor(slider5/100)*100, 0.0, 10000, 50);
+            );
+          slider5 = drag_slider_precise(slider5, 0.0, 10000, 25);
+          );
+        );
+      old_w=0;
+      slider_automate(slider5);
+    );
+
+// Slope
+    cap_mode == 5 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+      slider6 = drag_slider_xory_precise(slider6, 0, 3.0, 0.02);
+      old_w=0;
+      slider_automate(slider6);
+    );
+
+    cap_mode == 6 && cap_last_y != mouse_y ? (
+      slider7 = drag_slider(slider7, 0, 6, .03);
+      old_w=0;
+      slider_automate(slider7);
+    );
+
+// Analyzer mode
+
+    cap_mode == 8 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+      slider8 = drag_slider_xory(slider8, 0, 4, .025);
+      old_w=0;
+      slider_automate(slider8);
+    );
+    
+// Comm channel
+    cap_mode == 51 && cap_last_x != mouse_x ? (
+      slider51 = drag_slider_horiz(slider51, 1, 9, .02);
+      old_w=0;
+      slider_automate(slider51);
+    );
+
+
+
+// Frequency
+  cap_mode == 11 && cap_last_x != mouse_x ? (
+    slider11 = drag_slider_horiz_precise(slider11, 40, 20000, 0.2+ (freq/170) / (gfx_w/1000));
+    old_w=0;
+//    slider_automate(slider11);
+    );
+      
+// Width
+  cap_mode == 12 && cap_last_x != mouse_x ? (
+    slider12 = drag_slider_horiz_precise(slider12, 0.1, 6, 0.030- gfx_w/150000);
+    old_w=0;
+    slider_automate(slider12);
+    );
+// Attack
+/*
+  cap_mode == 15 && cap_last_y != mouse_y ? (
+    slider16 = drag_slider_precise(slider16, 0.5, 50, 0.06+slider16/100);
+    old_w=0;
+    slider_automate(slider16);
+    );
+*/
+  cap_mode == 15 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+    slider16 = drag_slider_xory_precise(slider16, 0.5, 50, 0.06+slider16/100);
+    old_w=0;
+    slider_automate(slider16);
+    );
+// Release
+  cap_mode == 16 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+    slider15 = drag_slider_xory_precise(slider15, 10, 500, 0.01+slider15/80);
+    old_w=0;
+    slider_automate(slider15);
+    );
+// Ratio
+  cap_mode == 14 && cap_last_y != mouse_y ? (
+    slider14 = drag_slider_precise(slider14, -12, -0.2, 0.005 + (-slider14/(field1h/2)));
+    old_w=0;
+    slider_automate(slider14);
+    );
+
+// Gain
+  cap_mode == 17 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+    slider13 = drag_slider_xory_precise(slider13, -12, 12, 0.02);
+    old_w=0;
+    slider_automate(slider13);
+    );
+// Band in
+  cap_mode == 20 && cap_last_y != mouse_y ? (
+    slider20 = drag_slider_precise(slider20, -9, 9, 0.03/(field1h/500));
+    old_w=0;
+    slider_automate(slider20);
+    );
+    
+// Threshold
+  cap_mode == 13 && cap_last_y != mouse_y ? (
+//    slider17 = drag_slider(slider17, -80, 0, 0.077); // 
+    slider17 = drag_slider_precise(slider17, -80, 0, max( 0.13 - gfx_h /15000 , 0.03) );
+//    slider17 = drag_slider_precise(slider17, -80, 0, 0.03 ); //gfx_h=1500
+//    slider17 = drag_slider(slider17, -80, 0, 0.09 ); //h=300
+    old_w=0;
+    slider_automate(slider17);
+    );
+    
+
+
+// BAND 2:
+//Frequency 2
+  cap_mode == 21 && cap_last_x != mouse_x ? (
+    slider21 = drag_slider_horiz_precise(slider21, 40, 20000, 0.2+ (freq2/170) / (gfx_w/1000) );
+    old_w=0;
+//    slider_automate(slider21);
+    );
+
+//Width 2
+  cap_mode == 22 && cap_last_x != mouse_x ? (
+    slider22 = drag_slider_horiz_precise(slider22, 0.1, 6, 0.030- gfx_w/150000 );
+    old_w=0;
+    slider_automate(slider22);
+    );
+// Attack 2
+  cap_mode == 25 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+    slider26 = drag_slider_xory_precise(slider26, 0.5, 50, 0.06+slider26/100);
+    old_w=0;
+    slider_automate(slider26);
+    );
+// Release 2
+  cap_mode == 26 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+    slider25 = drag_slider_xory_precise(slider25, 10, 500, 0.01+slider25/80);
+    old_w=0;
+    slider_automate(slider25);
+    );
+// Ratio 2
+  cap_mode == 24 && cap_last_y != mouse_y ? (
+    slider24 = drag_slider_precise(slider24, -12, -0.2, 0.005 + (-slider24/(field2h/2)));
+        old_w=0;
+    slider_automate(slider24);
+    );
+// Gain 2
+  cap_mode == 27 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+    slider23 = drag_slider_xory_precise(slider23, -12, 12, 0.02);
+    old_w=0;
+    slider_automate(slider23);
+    );
+
+// Band in 2
+  cap_mode == 30 && cap_last_y != mouse_y ? (
+    slider30 = drag_slider_precise(slider30, -9, 9, 0.03/(field2h/500));
+    old_w=0;
+    slider_automate(slider30);
+    );
+
+// Threshold 2
+  cap_mode == 23 && cap_last_y != mouse_y ? (
+    slider27 = drag_slider_precise(slider27, -80, 0, max( 0.13 - gfx_h /15000 , 0.03) );
+    old_w=0;
+    slider_automate(slider27);
+    );
+
+
+
+
+// Blend 1
+  cap_mode == 33 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+    slider33 = drag_slider_xory_precise(slider33, 0, 100, 0.4);
+    old_w=0;
+    slider_automate(slider33);
+    );
+
+// Blend 2
+  cap_mode == 34 && (cap_last_y != mouse_y || cap_last_x != mouse_x) ? (
+    slider34 = drag_slider_xory_precise(slider34, 0, 100, 0.4);
+    old_w=0;
+    slider_automate(slider34);
+    );
+
+
+
+
+
+) :
+(last_mouse_cap & 1) && !cap_drag ? (
+
+/*
+  cap_mode == 2 ? ( // FFT type
+    slider4 = cycle_slider(slider4, 0.0, 3.0, 1.0);
+    old_w=0;
+    slider_automate(slider4);
+  );
+*/
+/*
+    cap_mode == 52 ? ( // SHOW OTHERS'
+    slider52 = cycle_slider(slider52, 0.0, 1.0, 1.0);
+    old_w=0;
+    slider_automate(slider52);
+  );
+*/
+  cap_mode == 3 ? ( // FFT size
+    slider10 = cycle_slider(slider10, 0, 1, 1);
+    old_w=0;
+    slider_automate(slider10);
+  );
+
+  cap_mode == 4 ? ( // INTEG. TIME
+    slider5 = cycle_slider(slider5, 0, 2000, slider5*2+500);
+    old_w=0;
+    slider_automate(slider5);
+  );
+
+  cap_mode == 5 ? ( // SLOPE
+    slider6 = cycle_slider(slider6, 0.0, 3.0, 3.0);
+    old_w=0;
+    slider_automate(slider6);
+  );
+/*
+  cap_mode == 8 ? (
+    slider8 = cycle_slider(slider8, 0.0, 4.0, 1.0);
+    old_w=0;
+    slider_automate(slider8);
+  );
+*/
+/*  cap_mode == 9 ? ( // HELP
+    slider9 = cycle_slider(slider9, 0.0, 1.0, 1.0);
+    old_w=0;
+    slider_automate(slider9);
+  );
+*/
+
+  cap_mode == 14 ? ( // RED RATIO
+    slider14 == -2 ? (
+      slider14 = cycle_slider(slider14, -4, -2, 2) ):(
+      slider14 = cycle_slider(slider14, -2, -2, 0) );
+    old_w=0;
+    slider_automate(slider14);
+    );
+
+  cap_mode == 24 ? ( // GREEN RATIO
+    slider24 == -2 ? (
+      slider24 = cycle_slider(slider24, -4, -2, 2) ):(
+      slider24 = cycle_slider(slider24, -2, -2, 0) );
+    old_w=0;
+    slider_automate(slider24);
+    );
+  cap_mode == 15 ? ( // RED ATTACK
+    slider16 = cycle_slider(slider16, 5.632, 18, 10.45);
+    old_w=0;
+    slider_automate(slider16);
+    );
+  cap_mode == 16 ? ( // RED RELEASE
+    slider15 = cycle_slider(slider15, 12, 40, 28);
+    old_w=0;
+    slider_automate(slider15);
+    );
+  
+  cap_mode == 19 ? ( // RED STEEP
+    slider19 = cycle_slider(slider19, 0, 1, 1);
+    old_w=0;
+    slider_automate(slider19);
+    );
+  cap_mode == 29 ? ( // GREEN STEEP
+    slider29 = cycle_slider(slider29, 0, 1, 1);
+    old_w=0;
+    slider_automate(slider29);
+    );
+  
+  cap_mode == 25 ? ( // GREEN ATTACK
+    slider26 = cycle_slider(slider26, 5.632, 18, 10.45);
+    old_w=0;
+    slider_automate(slider26);
+    );
+  cap_mode == 26 ? ( // GREEN RELEASE
+    slider25 = cycle_slider(slider25,  12, 40, 28);
+    old_w=0;
+    slider_automate(slider25);
+    );
+
+
+
+  cap_mode == 18 ? ( // RED MUTE
+    slider18 = cycle_slider(slider18, 0, 1, 1);
+    old_w=0;
+    slider_automate(slider18);
+  );
+  cap_mode == 28 ? ( // GREEN MUTE
+    slider28 = cycle_slider(slider28, 0, 1, 1);
+    old_w=0;
+    slider_automate(slider28);
+  );
+
+  cap_mode == 8 ? ( // ANALYZER MODE
+    slider8 = cycle_slider(slider8, 0.5, 2.5, 1);
+    old_w=0;
+    slider_automate(slider8);
+  );
+  cap_mode == 31 ? ( // RED MODE
+    slider31 = cycle_slider(slider31, 0.5, 2.5, 1);
+    old_w=0;
+    slider_automate(slider31);
+  );
+  cap_mode == 41 ? ( // GREEN MODE
+    slider41 = cycle_slider(slider41, 0.5, 2.5, 1);
+    old_w=0;
+    slider_automate(slider41);
+  );
+
+// OPTO MODE
+    cap_mode == 32 ? (
+      slider32 = cycle_slider(slider32, 0, 1, 1);
+      old_w=0;
+      slider_automate(slider32);
+    );
+    cap_mode == 42 ? (
+      slider42 = cycle_slider(slider42, 0, 1, 1);
+      old_w=0;
+      slider_automate(slider42);
+    );
+
+
+// MODE BLEND
+    cap_mode == 33 ? (
+      slider33 = cycle_slider(slider33, 33, 75, 42);
+      old_w=0;
+      slider_automate(slider33);
+    );
+    cap_mode == 34 ? (
+      slider34 = cycle_slider(slider34, 33, 75, 42);
+      old_w=0;
+      slider_automate(slider34);
+    );
+
+// SOLO1 & SOLO2
+    cap_mode == 35 ? (
+      slider35 = cycle_slider(slider35, 0, 1, 1);
+      old_w=0;
+      slider_automate(slider35);
+    );
+    cap_mode == 36 ? (
+      slider36 = cycle_slider(slider36, 0, 1, 1);
+      old_w=0;
+      slider_automate(slider36);
+    );
+
+/*
+cap_mode == 13 ? (
+      slider17 = cycle_slider(slider17, -30, 0, 15);
+      old_w=0;
+      slider_automate(slider17);
+      );
+*/
+
+
+  ):(
+  guide = 0;
+  );
+
+cap_mode && cap_timer < 12 ? cap_timer += 1;
+//cap_timer < 12 ? cap_timer += 1;
+last_mouse_cap = mouse_cap;
+
+
+cap_mode == 3 && mouse_cap == 0 ? (
+  slider1 = floor(slider1)+0.5;
+  slider_automate(slider1);
+  );
+
+cap_mode == 8 && mouse_cap == 0 ? (
+  slider8 = floor(slider8)+0.5;
+  slider_automate(slider8);
+  );
+
+cap_mode == 31 && mouse_cap == 0 ? (
+  slider31 = floor(slider31)+0.5;
+  slider_automate(slider31);
+  );
+
+cap_mode == 41 && mouse_cap == 0 ? (
+  slider41 = floor(slider41)+0.5;
+  slider_automate(slider41);
+  );
+
+//cap_mode > 0 ? update = 1;
+update = 1;
+
+
+
+// only update if new fft data is there or if the size changed
+update || old_w != gfx_w || old_h!=gfx_h? (
+
+old_w=gfx_w; old_h=gfx_h;
+
+gfx_r=gfx_g=gfx_b=0; gfx_a=1;
+gfx_x=gfx_y=0;
+);
+
+gfx_rectto(gfx_w,gfx_h2);
+
+//sc=(gfx_h-20)*20/(-slider2 * log(10));
+sc=(gfx_h-20)*20/(-slider2o * log(10));
+
+// draw horz grid
+gfx_r=gfx_g=gfx_b=0.6;
+//gfx_a=0.5;
+gfx_a=0.3;         // mrelwood: Roof horizontal line
+gv=1;
+cnt=100;
+//gfx_y=-100;
+gfx_y=-00;
+
+while(
+
+// mrelwood: 0dB at top of scale:
+//  y=20-log(gv)*sc;
+//  y=20-log(gv)*sc-20;
+  y=20-log(gv)*sc-14;
+  
+  y> gfx_y ? (
+    gfx_line(0,y,gfx_w,y,0);
+    bottom_line = gfx_y;
+    gfx_x=0; 
+//    gfx_y=y+2;
+    gfx_y=y-4;
+    
+// mrelwood: bright text dB scale:
+    gfx_a=0.7;
+    
+    gfx_drawnumber(log10(gv)*20 - (roof*6-6) ,0);
+
+
+// mrelwood: dimmer opacity horizontal scale lines:
+    gfx_a=0.2;
+
+    gfx_y+=gfx_texth;
+
+// mrelwood: dimmer opacity horizontal scale lines near bottom:
+//    gfx_y > gfx_h-gfx_texth-20 ? (gfx_a=0.0);
+
+
+  );
+  gv*=0.5;
+
+  gfx_y<gfx_h && cnt-=1 > 0;
+);
+
+// mrelwood: decrease frequency extension:
+//wsc=gfx_w/log(1+400);
+//wsc=(gfx_w/log(1+400))*1.015;
+//wsc=(gfx_w/log(1+400))+9;
+
+wsc=(gfx_w/log(1+400))+gfx_w* 0.005;
+wsc2 = wsc;
+
+
+// draw vert grid
+f=20;
+//gfx_x+=4;
+gfx_x+=0;
+lx=gfx_x;
+
+
+while(
+
+// mrelwood: brighter frequency lines:
+
+gfx_a=0.4;
+
+f < 100 ? gfx_a *= 0.6;
+f > 500 ? ( f < 1000 ? gfx_a *= 0.8 );
+f > 5000 ? ( f < 10000 ? gfx_a *= 0.8 );
+
+f==500 || f==5000 || f==20000 ? gfx_a *= 1.5 ;
+f==50 ? gfx_a = 0.7 ;
+f==100 || f==1000 || f==10000 ? gfx_a = 0.85 ;
+
+
+
+// mrelwood: offset frequency scale, pixels
+//  tx = log(1.0+(f/srate*2.0)*400)*wsc; (-30)
+  tx = (log(1.0+(f/ old_srate *2.0)*400)*wsc)  - wsc*0.2;
+
+/*  dotext = tx > gfx_x && f!=40 && f!=4000 && f != 15000 &&
+     (f<400 || f >= 1000 || f == 500) && (f<6000 || f>=10000);
+*/     
+
+// mrelwood: Only show certain values on x-scale:
+
+     
+  wsc < 56 ? (
+    dotext = tx > gfx_x && f!=90 && f!=20000 &&
+//     (f<30 || f == 100 || f == 1000 || f == 5000 || f == 10000)
+      (f==100||f==1000||f==10000)
+
+  ) : (
+
+  wsc < 90 ? (
+    dotext = tx > gfx_x && f!=20000 && f!=15000 &&
+//     (f<30 || f == 100 || f == 500 || f == 1000 || f == 5000 || f == 10000)
+      (f==50||f==100||f==1000||f==5000||f==10000)
+
+//     );
+///*
+  ) : (
+    dotext = tx > gfx_x && f!=40 && f!=4000 &&
+      (f==50||f==100||f==500||f==1000||f==5000||f==10000||f==15000)
+/*     (f<30 || f>=50) &&
+     (f<60 || f>=100) &&
+     (f<400 || f >= 1000 || f == 500) &&
+     (f<6000 || f>=10000)
+*/
+  );
+);     
+//     
+
+
+  f>10000?dotext=0;
+
+  tx > lx ? ( lx=tx+4; gfx_line(tx,0,tx,gfx_h - ( dotext ? 8 : gfx_texth-2 ) ,0); );
+  dotext ? (
+    gfx_x=tx +3;
+    gfx_y = gfx_ext_retina*2;
+//    f>=1000 ? gfx_printf("%dkHz",f*.001) : gfx_printf("%dHz",f);
+
+
+// mrelwood: Frequency numbers brightness:
+    gfx_a=0.8;
+//    f>=1000 ? (
+      f==20 || f==50 || f==100 || f==500 ? gfx_printf("%d",f*1);
+      f==1000 ? gfx_printf("%d kHz",f*.001);
+      f==10000 /*|| f==10000 || f==15000*/ ? gfx_printf("%dk",f*.001);
+//        ) : (
+//      );
+
+
+//      ) : (
+//      gfx_printf("%d",f);
+
+    gfx_a=0.4;
+
+      
+      
+  );
+  f += (f<100?10:f<1000?100:f<10000?1000:5000);
+  f <  old_srate *0.5;
+);
+
+
+
+
+//////////////////////////////////////// MODESSER:
+
+
+
+
+
+
+
+//update=1;
+update ? (
+  update=1;
+
+  integrate_sc = 1;
+  slider5 > 0 ? (
+    integrate_now = time_precise();
+    integrate_en ? (
+      // fps = 1/(integrate_now - integrate_lastt);
+      integrate_sc -= exp(-5 * 1000.0 * (integrate_now - integrate_lastt) / slider5);
+      ) : (
+      // force overwrite of buffer
+      integrate_en = 1;
+      );
+    integrate_lastt = integrate_now;
+    ) : (
+    integrate_en = 0;
+    );
+
+// mrelwood:
+//  slope != (slider6|2) ? (
+  slope != slider6*10 ? (
+    slope=slider6*10;
+    );
+
+  roof != (slider7|0) ? (
+    roof=slider7|0;
+    );
+      
+  fftidx != (slider1+6|0) ? (
+    fftidx=slider1+6|0;
+    fftsize=2^(min(max(fftidx,0),11)+4);
+    integrate_sc=1;
+    );
+  
+  freq != slider11 && slider11 > 30 ? (
+    freq=slider11;
+    );
+  
+  freq2 != slider21 && slider21 > 30 ? (
+    freq2=slider21;
+    );
+  
+  
+  //width != slider11 ? freq=slider11;
+  thresli != slider17 ? (
+    thresli=slider17;
+  //  slider_automate(slider17);
+  //  old_w=0;
+    );
+  
+  //width != slider11 ? freq=slider11;
+  thresli2 != slider27 ? (
+    thresli2=slider27;
+  //  slider_automate(slider17);
+  //  old_w=0;
+    );
+    
+  
+  slider10 == 1 ? (  
+  
+
+  windowsize != fftsize || windowtype != (slider4|0) ? (
+    windowtype=slider4|0; 
+    windowsize=fftsize;
+    dwindowpos = $pi*2/fftsize;
+    i=pwr=0;
+    loop(fftsize*.5+1,
+       windowpos=i*dwindowpos;
+       pwr += (window[i] = (
+         windowtype==1 ? 0.53836 - cos(windowpos)*0.46164 :
+         windowtype==2 ? 0.35875 - 0.48829 * cos(windowpos) + 0.14128 * cos(2*windowpos) - 0.01168 * cos(3*windowpos) :
+         windowtype==3 ? 0.42 - 0.50 * cos(windowpos) + 0.08 * cos(2.0*windowpos) :
+          1.0));
+       i+=1;
+    );
+    pwr=.5/(pwr*2-window[i-1]);
+    loop(fftsize*.5+1,window[i-=1]*=pwr);
+    integrate_sc=1;
+  );
+
+  
+  buf1=recpos-fftsize;
+  buf1<0 ? buf1+=histsize;
+  buf2=window;
+  buf3=fftworkspace;
+  loop(fftsize*.5 + 1,
+    buf3[] = buf1[]*buf2[];
+    buf3+=1;
+
+    buf2+=1;
+    (buf1+=1) >= histsize ? buf1 -= histsize;
+  );
+  buf2-=1;
+  loop(fftsize*.5 - 1,
+    buf3[] = buf1[]*(buf2-=1)[];
+    buf3+=1;
+    (buf1+=1) >= histsize ? buf1 -= histsize;
+  );
+
+  fft_real(fftworkspace,fftsize);
+  fft_permute(fftworkspace,fftsize/2);
+  fftworkspace[1]=0;
+
+  ascale=gfx_h/$pi*0.25-0;
+//  xscale=800/(fftsize-4);
+  xscale=800/(fftsize-4);
+
+  buf3=fftworkspace;
+  buf2=integrate_buf+max_fft_size*0.5;
+  i=0;
+  lx=0;
+  slider3 ? loop(fftsize*0.5,
+    ang=-atan2(buf3[1],buf3[]);
+    buf3+=2;
+    
+    integrate_en ? (
+      ang = buf2[] += integrate_sc * (ang - buf2[]);
+      buf2+=1;
+    );
+    
+
+    ty2=ang*ascale + gfx_h*0.5;
+    tx = log(1.0+i*xscale)*wsc;
+
+    i ? 
+    ( 
+      gfX_r=0.6; gfx_g=0; gfx_b=0.8; gfx_a=1;
+      gfx_x=lx; gfx_y=ly2; gfx_lineto(tx,ty2,1) ;
+    );
+
+    lx=tx; ly2=ty2;
+    i+=1;
+  );  
+  
+  buf3=fftworkspace;
+  buf2=integrate_buf;
+  lx=0;
+  i=0;
+  fill_slmin=gfx_h;
+  fill_slast=0;
+  loop(fftsize*0.5,   
+
+    ty = log(max(sqr(buf3[0])+sqr(buf3[1]),(10^(-500/20*2)))) ;
+
+
+// mrelwood: compensate graph height for tilt:
+//    ty = log(max(sqr(buf3[0])+sqr(buf3[1]),(10^(-500/20*2))))  +2.47;
+//    ty = log(max(sqr(buf3[0])+sqr(buf3[1]),(10^(-500/20*2))))  + (2.5-2.5/(slope*0.05+1))*1.65;
+
+
+
+
+
+
+
+
+
+
+// SLOPE!!!!!!
+
+//      hipass = 10/(lx)+1;
+//      ty *= hipass;
+
+      lowcut = (1- min(6*lx/gfx_w,1));   // Gives 1 at 0% x, 0 at 1/6th and up of x.
+      lowcut *= 0.8 - (0.2-slider5/50000);
+      
+//      hicut = max(gfx_x/gfx_w-0.87 , 0);
+//      hicut *= 2;
+      hicut = (lx/gfx_w)^12 * 0.4;       // Hi rolloff at 1/15th from the max f.
+
+      hishelf = (1+ (1- 1/max(lx/gfx_w+1 , 1.7))) ^ 10 /30;
+
+//      lowcut = lowcutcalc*slider5/15000 + 0;
+//      lowcut *= min((slider5/8000)^0.1 , 1);   // Takes slider5 into account.
+
+//    ty /= 0.8+((gfx_x)/gfx_w*1.0);
+    ty += (lx/gfx_w) * (slope/4.8) - lowcut*0.8*(fftsize/32768+0.5) - hicut*1.4 + hishelf*0.5;
+//    ty += (lx/gfx_w) * (slope/4.8);
+
+
+
+
+      ty += (fftidx-6)*0.7;    //Same y level for all FFT sizes.
+
+//tx<10?    ty -= 100;
+
+ ty -= 2.3;         // Adjust overall graph height (from top).
+ 
+ ty -= slope/10;    // Height when sloped. /10 pivots at 1k, /20 at 250Hz.
+
+
+//    ty = log(max(sqr(buf3[0])+sqr(buf3[1]),(10^(-500/20*2))))  +0.3;
+
+
+
+
+    buf3+=2;    
+
+    integrate_en ? (
+      ty = buf2[] += integrate_sc * (ty - buf2[]);
+      buf2+=1;
+    );
+    
+    ty = ty*-0.5*sc + 20;
+    
+//    gfx_x < 100 ? ty=gfx_h/2;
+    
+
+//    tx = log(1.0+i*xscale)*wsc-40;
+
+// mrelwood: Compensate graph X position:
+    tx = log(1.0+i*xscale)*wsc - 0.2*wsc;
+//i = 0;
+    i ? 
+    ( 
+
+                             // GRAPH MODE FILL COLORS
+
+modeana < 1 ? (gfx_r = 0.7; gfx_g = 0.7; gfx_b = 0.7; gfx_a=0.12;) :
+modeana < 2 ? (gfx_r = 0.25; gfx_g = 0.65; gfx_b = 0.25; gfx_a=0.25;) :
+modeana < 3 ? (gfx_r = 0.7; gfx_g = 0.7; gfx_b = 0.0; gfx_a=0.2;) :
+modeana < 4 ? (gfx_r = 0.25; gfx_g = 0.45; gfx_b = 1; gfx_a=0.2;) :
+modeana < 5 ? (gfx_r = 0.8; gfx_g = 0.3; gfx_b = 0.25; gfx_a=0.2;) ;
+
+
+      1/*fill?*/ ? (
+//        gfx_a=0.125;
+        tx0=tx|0;
+        lx0=lx|0;
+        tx0>lx0? (
+          ly < gfx_h || ty < gfx_h ?
+            gfx_triangle(lx0,max(gfx_h,ly),lx0,ly,tx0-1,ty,tx0-1,max(gfx_h,ty));
+        ) : (
+          tx0 > fill_slast ? (
+            fill_slast < gfx_h ? gfx_line(fill_slast,gfx_h,fill_slast,fill_slmin);
+            fill_slmin=gfx_h;
+          ) : (
+            fill_slmin=min(fill_slmin,ty);
+          );
+        );
+        fill_slast=tx0;        
+      );  
+
+
+// mrelwood: Graph line lower opacity for busy trebles:
+
+      gfx_a = pow(gfx_w-gfx_x,1.8) /  (pow(gfx_w,1.8) / (12-fftidx)    )
+      + wsc* (0.0037-fftidx*0.0003) ;
+
+
+
+      gfx_a > 1 ? gfx_a = 1;
+      gfx_a < 0.01 ? gfx_a = 0.01;
+            
+
+//                                                   GRAPH EDGE COLOR
+      gfx_a *= 1 ;      
+      gfx_x=lx; gfx_y=ly; gfx_lineto(tx,ty,1) ;
+    );
+
+    ty<gfx_h ? update=1;
+
+    lx=tx; ly=ty; ly2=ty2;
+    i+=1;
+  );
+);
+
+
+
+
+); // ANALYZER OFF?
+
+
+
+
+ 
+  meter_bot=42;
+  
+  
+//  meter_h=min(gfx_h,16);
+  meter_h = 54 * gfx_ext_retina;
+  xscale=gfx_w*20/meter_bot;
+  yscale=(gfx_h-meter_h)*20/meter_bot;
+  xscale2 = xscale;
+  yscale2 = yscale;
+
+// Frequency field :
+/*
+pad = 3 * gfx_ext_retina;
+padlow = 7 * gfx_ext_retina;
+gfx_x = 2 * gfx_ext_retina;
+gfx_y = 2 * gfx_ext_retina;
+gfx_r=0.6; gfx_g=0.6; gfx_b=0.6; gfx_a=1;
+gfx_rectto(gfx_w-2 * gfx_ext_retina,meter_h-padlow);
+
+gfx_x = 2 * gfx_ext_retina+pad;
+gfx_y = 2 * gfx_ext_retina+pad;
+gfx_r=0; gfx_g=0; gfx_b=0; gfx_a=1;
+gfx_rectto(gfx_w-2 * gfx_ext_retina-pad,meter_h-padlow-pad);
+
+gfx_x = 2 * gfx_ext_retina+pad*0.7;
+gfx_y = 2 * gfx_ext_retina+pad;
+gfx_r=gfx_g=gfx_b=1; gfx_a=0.4;
+gfx_rectto(gfx_w-2 * gfx_ext_retina-pad*0.5 , 2 * gfx_ext_retina+pad*0.6);
+gfx_rectto(gfx_w-2 * gfx_ext_retina-pad , meter_h-padlow-pad*0.6);
+
+gfx_x = gfx_w-2 * gfx_ext_retina-pad*0.5;
+gfx_y = meter_h-4 * gfx_ext_retina-pad*0.4;
+gfx_rectto(2 * gfx_ext_retina+pad*0.4 , meter_h-padlow-pad*0.0);
+gfx_rectto(2 * gfx_ext_retina+pad*0.7 , 2 * gfx_ext_retina+pad);
+
+*/
+meter_w = gfx_w*0.1;
+
+
+// ää
+
+
+
+
+
+
+
+function draw_button(xp, yp, str) 
+  instance(w,h,x,y) 
+  globals(gfx_r,gfx_g,gfx_b,gfx_x,gfx_y) 
+(
+  gfx_measurestr(str, w, h);
+  xp -= w+3;
+  x=xp;
+  y=yp;
+//  gfx_set(0.04,0.18,0,0.8);                // Others' Button background color
+  gfx_set(0.02,0.02,0.15,1);                // Others' Button background color
+  w+=3;
+  h+=3;
+  gfx_rect(x,y,w,h);
+  gfx_set(.85,.85,.75, 0.5);                     // Others' Button rectangle color
+  gfx_line(x,y,x+w,y);
+  gfx_line(x+w,y,x+w,y+h);
+  gfx_line(x,y+h,x+w,y+h);
+  gfx_line(x,y,x,y+h);
+  h+=1;
+  w+=1;
+  gfx_x=xp+2; gfx_y=yp+3;
+  gfx_set(.9,.95,.9, 0.9);                     // Others' Button text color
+  gfx_drawstr(str);
+  gfx_x = xp;
+);
+
+
+//field1xa > (gfx_texth*1.5) && field2xa > (but_h*3) ?
+others <= 0 ?
+others_button.draw_button(gfx_texth*2.85 , gfx_h - but_h * 1.1,
+  sprintf(#,"Others'",slider52));
+
+
+// Dim "Others'" button when N/A
+(showplease == 0) && (slider52 <= 0) ? (
+  gfx_x = but_h*0.1;
+  gfx_y = gfx_h - but_h*1.0;
+  gfx_set(0,0,0,0.4);
+  gfx_rectto(gfx_texth*2.8 , gfx_h - but_h*0.1);
+  );
+
+
+
+
+
+//å
+
+// FREQUENCIES OF OTHER PLUGIN INSTANCES
+// SHOWOTHERS REWRITE
+
+
+
+
+// Defining mouseothers
+slider52 >= 1 && mouse_cap == 0 && mouse_y > (gfx_h - but_h*1.2) && (mouse_y < gfx_h) 
+&& (mouse_x > but_h * 3) && (mouse_x < gfx_w - but_h * 1.3) ?
+  (mouseothers = 1) : mouseothers = 0;
+
+// Defining mouseothersbut
+slider52 >= 1 && mouse_y > (gfx_h - but_h*1.2) && (mouse_y < gfx_h) 
+&& (mouse_x > 0) && (mouse_x < but_h * 3) ?
+  (mouseothersbut = 1) : mouseothersbut = 0;
+
+
+
+
+
+
+
+// Hide Channel slider
+slider52 == 2 ? (
+  (mouse_cap > 0) && (cap_mode != 51) ? slider52 = 1;
+//  mouseothers == 0 && (cap_mode != 51) ? slider52 = 1;
+  (mouseothers == 0) && (mouse_cap == 0) ? slider52 = 1;
+  );
+
+
+
+
+
+
+slider52 == 1 && noclick == 0 && help == 0 ? (
+  (mouse_cap > 0) && (mouseothersbut > 0) ? (
+    showplease == 1 ? slider52 = -1 : slider52 = 0;
+    noclick = 1;
+    );
+  showplease == 0 && mouseothers == 0 && mouseothersbut == 0 ? slider52 = 0;
+
+  );
+
+slider52 <= 0 && noclick == 0 ?
+  (mouse_cap > 0) && (cap_mode == 52) ? (slider52 = 1) && (noclick = 1);
+
+//slider52 == 0 && showplease == 1 ? slider52 = 1;
+  
+mouse_cap == 0 ? noclick = 0;
+
+showothers = slider52;
+help == 1 ? (
+  mouseothers == 1 ? slider52 = 2 : slider52 = 1;
+  );
+
+
+slider52 == -1 && showplease == 0 ? slider52 = 1;
+
+
+// Show channel slider
+//mouseothers == 0 && mouseothersbut == 0 && showdelay == 1 ? showdelay = 2;
+
+mouseothers == 1 ? ( // && !mouse_cap ? (
+  slider52 = 2;
+  );
+
+showplease == 1 && others != -1 && slider52 == 0 ? slider52 = 1;
+cap_mode == 51 && cap_drag == 1 ? (slider52 = 2; showothers = 2; showdelay = 1;);
+
+
+// Delay before hiding Others
+mouseothersbut > 0 && showplease == 0 ? showdelay = 1;
+mouseothers > 0 && showplease == 0 ? showdelay = 1;
+
+cap_drag == 1 && mouse_cap == 0 ? cap_drag = 0;
+cap_mode == 52 && mouse_cap == 1 && showdelay == 1 ? showdelay = 0;
+cap_mode == 51 && mouse_cap == 1 ? (slider52 = 2; showothers = 2;);
+
+mouseothers == 0 && mouseothersbut == 0 && showdelay == 1 && help == 0 ? showdelay = 2;
+
+showdelay > 1 && mouse_cap == 0 ? (
+  showdelay += 1;
+  slider52 == 0 ? slider52 = 1;
+  mouseothers == 1 ? showothers = 2 : showothers = 1;
+//  mouseothers = 1;
+  showdelay >= 60 && mouseothers == 0 && mouseothersbut == 0 ? (
+    showdelay = 0;
+    slider52 = 0;
+    showothers = 0;
+//    mouseothers = 0;
+    );
+  );
+
+
+
+
+
+
+
+
+
+// FREQUENCY FIELD FIGHT
+
+minw = gfx_texth*5.5 ;
+fightpad = gfx_ext_retina * 3 ;
+
+// x position for freq & freq2
+fscale = (log(1.0+(freq/ old_srate *2.0)*400)*wsc)  - wsc*0.2;
+fscale2 = (log(1.0+(freq2/ old_srate *2.0)*400)*wsc2)  - wsc2*0.2;
+
+// field widths (optimal)
+field1w_ = field1w = max(gfx_w / 7 * ( width^1.4 / 5 + 0.8) , minw );
+field2w_ = field2w = max(gfx_w / 7 * ( width2^1.4 / 5 + 0.8) , minw );
+
+// frequency field x positions with end limits
+field1x_ = field1x = max ( min( fscale , gfx_w - minw /2) , minw /2) ;
+field2x_ = field2x = max ( min( fscale2 , gfx_w - minw /2 ) , minw /2) ;
+
+field1xa_ = field1xa = min(gfx_w - minw , field1x_ - field1w_ /2);
+field1xb_ = field1xb = max(minw , field1x_ + field1w_ /2);
+field2xa_ = field2xa = min(gfx_w - minw , field2x_ - field2w_ /2);
+field2xb_ = field2xb = max(minw , field2x_ + field2w_ /2);
+
+// label x positions with end limits
+f1labx_ = min( gfx_w - but_h*3.1 , max( but_h*2.5 , fscale ) );
+f2labx_ = min( gfx_w - but_h*3.1 , max( but_h*2.5 , fscale2 ) );
+
+
+
+cap_mode == 11 ? lastcap_f = 11 ;
+cap_mode == 21 ? lastcap_f = 21 ;
+
+
+
+abs(field1x_ - field2x_) < field1w_/2 + field2w_/2 + fightpad ? (
+  fight = 1;
+
+  fightwinner == 21 ? (
+    winf = freq2; losef = freq;
+    winx_ = field2x_;   winw_ = field2w_;
+    winxa_ = field2xa_; winxb_ = field2xb_;
+    losex_ = field1x_;   losew_ = field1w_;
+    losexa_ = field1xa_; losexb_ = field1xb_;
+    winlabx_ = f2labx_; loselabx_ = f1labx_ ; 
+    winscale = fscale2; losescale = fscale;
+
+    ):(
+    winf = freq; losef = freq2;
+    winx_ = field1x_;   winw_ = field1w_;
+    winxa_ = field1xa_; winxb_ = field1xb_;
+    losex_ = field2x_;  losew_ = field2w_;
+    losexa_ = field2xa_; losexb_ = field2xb_;
+    winlabx_ = f1labx_ ; loselabx_ = f2labx_;
+    winscale = fscale; losescale = fscale2;
+    );
+
+  losef < winf ? (
+
+    winxa = max(winxa_ , minw + fightpad);
+    winxb = max(winxb_ , minw*2 + fightpad);
+    losexb = max(minw , winx_ - winw_/2 - fightpad);
+    losexa__ = min(losex_ - losew_/2 , winxa -minw -fightpad/2);
+    (losexa__ < 0) && (losexb - losexa__ > minw) ? (
+      losexa = min(0 , losexa__ + (losexb_ - losexb)); ):( losexa = losexa__ );
+
+    winlabx = max(but_h * 3.9 , winlabx_ );
+    loselabx = min(loselabx_ , winlabx - but_h*(2.1+(freq2^0.2)/5)) ;
+
+    ):(  // (if losef > winf)
+
+    winxa = min(winxa_ , gfx_w - minw*2 - fightpad);
+    winxb = min(winxb_ , gfx_w - minw - fightpad);
+    losexa = min(gfx_w - minw , winx_ + winw_/2 + fightpad);
+    losexb__ = max(losex_ + losew_/2 , winxb +minw +fightpad/2);
+    (losexb__ > gfx_w) && (losexb__-losexa > minw) ? (
+      losexb = max(gfx_w , losexb__ - (losexa - losexa_)); ):( losexb = losexb__ );
+
+    winlabx = min(gfx_w - but_h * 6.7 , winlabx_ );
+    loselabx = max(loselabx_ , winlabx + but_h*(2.1+(freq2^0.2)/4.5)) ;
+    );
+
+  fightwinner == 21 ? (
+    field2xa = winxa; field2xb = winxb;
+    field2x = (winxa + winxb) /2;
+    field2w = winxb - winxa;
+    
+    field1xa = losexa; field1xb = losexb;
+    field1x = (losexa + losexb) /2; 
+    field1w = losexb - losexa;
+    f2labx = winlabx; f1labx = loselabx; 
+    ):(
+//    field1x = winx;  
+    field1xa = winxa; field1xb = winxb;
+    field1x = (winxa + winxb) /2;
+    field1w = winxb - winxa;
+    
+    field2xa = losexa; field2xb = losexb;
+    field2x = (losexa + losexb) /2; 
+    field2w = losexb - losexa;
+    f1labx = winlabx; f2labx = loselabx;    
+    );
+
+  ):(      //    no fight
+
+  field1xa = field1xa_; field1xb = field1xb_;
+  field2xa = field2xa_; field2xb = field2xb_;
+  field1w = field1xb_ - field1xa_;
+  field2w = field2xb_ - field2xa_;
+  field1x = (field1xa_ + field1xb_) /2;
+  field2x = (field2xa_ + field2xb_) /2;
+
+  f1labx = f1labx_; f2labx = f2labx_;    
+  fight = 0 ;
+  fightwinner = lastcap_f ;
+  );
+
+
+
+//field1x < field1w_/2 + edgepad ? field1w = field1x * 2 + edgepad;
+//field2x > gfx_w - field2w_/2 - edgepad ? field2w = (gfx_w - field2x) *2 - edgepad;
+//field1x > gfx_w-field1w_/2 - edgepad ? field1w = gfx_w-field1w_/2 - edgepad;
+
+
+fight == 1 ? (
+  fightwinner == 21 && cap_mode == 11 ? (
+    fight_hiwin == 21 && freq > freq2 ? fightwinner = 11;
+    fight_hiwin == 11 && freq < freq2 ? fightwinner = 11;
+    );
+  fightwinner == 11 && cap_mode == 21 ? (
+    fight_hiwin == 21 && freq > freq2 ? fightwinner = 21;
+    fight_hiwin == 11 && freq < freq2 ? fightwinner = 21;
+    );
+  mouse_cap == 0 ? (
+    freq2 > freq ? fight_hiwin = 21;
+    freq > freq2 ? fight_hiwin = 11;
+    );
+  );
+
+
+
+
+
+
+
+    
+// Field 1 background /////////////////////////////////////
+
+
+//moved above FIGHT:
+//field1w = max(gfx_w / 7 * ( width^1.4 / 5 + 0.8), gfx_texth*5.5 );
+field1h = gfx_h / 3 * 2;
+field1hi = gfx_texth * 2.8;
+field1lo = gfx_h2 - but_h * 0.2 ;
+
+
+// FIELD 1 & FIELD 2 low2 position (buttons & inner fill)
+field1lo2 = field1lo - pad;
+field2lo2 = field2lo - pad;
+
+
+//showothers > 0 ? field1lo -= but_h*0.8;
+
+
+//fight == 1 && fightwinner == 21 && freq > freq2 ?
+
+field1xa == field1xa_ ?
+  field1xc = field1xa + but_h * 0.7:
+  field1xc = field1xa ;
+
+field1xb == field1xb_ ?
+  field1xd = field1xb - but_h * 0.7:
+  field1xd = field1xb ;
+
+field1ya = field1hi + but_h * 1.3;
+field1yb = field1lo - but_h * 1.4;
+
+gfx_r = 0.25 ; gfx_g = gfx_b = 0.0;
+gfx_a = 0.7;
+gfx_x = field1xa;
+gfx_y = field1hi;
+
+gfx_rectto ( field1xb , field1ya );
+gfx_rectto ( field1xd , field1yb );
+gfx_x = field1xb;
+gfx_y = field1lo-pad*0.5;
+gfx_rectto ( field1xa , field1yb-1 );
+gfx_rectto ( field1xc , field1ya );
+
+
+// FIELD 1 MODE COLORS
+
+mode1 >= 1 ? (
+mode1 < 2 ? (gfx_r = 0.0; gfx_g = 0.55; gfx_b = 0.05; gfx_a=0.2;) :
+mode1 < 3 ? (gfx_r = 0.65; gfx_g = 0.45; gfx_b = 0.0; gfx_a=0.28;) :
+mode1 < 4 ? (gfx_r = 0.04; gfx_g = 0.25; gfx_b = 0.9; gfx_a=0.3;) :
+mode1 < 5 ? (gfx_r = 0.65; gfx_g = 0.05; gfx_b = 0.0; gfx_a=0.26;) ;
+
+gfx_x = field1xc;
+gfx_y = field1ya;
+gfx_rectto(field1xd , field1yb);
+);
+
+
+
+// Field 1 Border:
+
+gfx_r = 0.4 ; gfx_g = gfx_b = 0.05;
+gfx_a = 0.6; 
+
+/*
+gfx_lineto ( field1x + field1w /2 , field1hi );
+gfx_lineto ( field1x - field1w /2 , field1hi );
+gfx_lineto ( field1x - field1w /2 , field1lo , 0);
+gfx_lineto ( field1x + field1w /2 , field1lo );
+*/
+
+pad = gfx_ext_retina * 1.5;
+
+gfx_x = field1x - field1w /2 - pad;
+gfx_y = field1hi - pad;
+gfx_rectto (field1x + field1w /2 + pad, field1hi + pad * 3 );
+gfx_rectto (field1x + field1w /2 - pad, field1lo + pad * 1 );
+gfx_rectto (field1x - field1w /2 - pad, field1lo - pad * 2 );
+gfx_rectto (field1x - field1w /2 + pad, field1hi - pad);
+
+
+
+// dB meter scale
+
+meterw = gfx_texth*0.5 + field1w *0.2;
+
+
+  gfx_r= 0.7 ; gfx_g= 0.4 ; gfx_b=0.6; gfx_a=1;
+
+  s2=sqrt(2)/2;
+  g = s2;
+
+
+
+
+
+  while(
+    gfx_y < gfx_h*0.855 ? (
+//                                      Top height of dB meter lines
+      gfx_x = field1x - meterw;
+      gfx_y = field1hi + log10(g)*-yscale;
+
+  gfx_r= 0.7 ; gfx_g= 0.5 ; gfx_b=0.6; gfx_a=1;
+
+//      gfx_lineto( field1x + meterw ,gfx_y);
+      gfx_x = field1x - meterw + gfx_ext_retina*4;
+      gfx_lineto( field1x -gfx_ext_retina*4 ,gfx_y);
+      gfx_x = field1x +gfx_ext_retina*4;
+      gfx_lineto( field1x-gfx_ext_retina*4 + meterw ,gfx_y);
+
+
+
+      );
+
+    gfx_y < field1lo - gfx_texth * 1.7 ? (
+
+      numbersx = gfx_x + gfx_texth*0.1;
+      gfx_x = min(numbersx, field1x + field1w /2 - gfx_texth*1.5);
+      gfx_y -= gfx_texth*0.55;
+      gfx_r= gfx_g=gfx_b=1; gfx_a=0.4;
+    
+      gfx_x > field1x ? (
+      
+  
+        db1scdiv = 1;
+        while(db1scdiv < 9)(
+          floor(log10(g)*20/db1scdiv *10 + 0.5) == -60 ?
+          gfx_drawnumber(log10(g)*20,0);
+          db1scdiv += 1;
+          );
+ 
+        );
+// GR scale numbers
+
+      gfx_a += 0.2;
+      number =  log10(sqrt(g))*20 /3*2;      
+  
+      slider14 > -1 ? (     
+        gfx_x = field1x - gfx_texth*1.1 - field1w *0.2 ;
+
+        gr1div = 1;
+        while(gr1div <= 3)(
+          floor((-number/gr1div)*10+0.5) == 30 ?
+          gfx_drawnumber(-number,0);
+          gr1div += 1;
+          );
+
+        ):(
+        gfx_x = field1x - gfx_texth*1.4 - field1w *0.2 ;
+        
+        gr1div2 = 1;
+        while(gr1div2 <= 3)(
+          floor((-number/gr1div2)*10+0.5) == 30 ?
+          gfx_drawnumber(number,0);
+          gr1div2 += 1;
+          );
+
+        );
+/*
+      gfx_x -= gfx_texth *0.4;
+      number/4 < -2.9 && number/4 > -3.1 ?
+        gfx_drawnumber(number,0);
+*/
+
+
+      gfx_a -= 0.2;
+
+        );
+
+
+      
+    
+
+//      gfx_y=meter_h;             //SC dB scale
+//      gfx_x-=gfx_w/12 - 21 ;                 //SC dB scale -3 x-location
+//      gfx_x-=16 ;                 //SC dB scale -6 x-location
+//      gfx_x < gfx_w*0.45 ? ( gfx_x-=gfx_w/55 ); //SC dB scale X when below 0.6 width
+//      (log10(g)*20) < -10 ? ( gfx_x-=8 ); //SC dB X when GR below -10
+//      gfx_drawnumber(log10(g)*40,0);
+
+
+      g*=s2;
+    );
+  
+
+
+
+
+// GR Meter:
+
+//gfx_r=0.00; gfx_g = 0.35; gfx_b = 0.8; gfx_a = 0.6;
+//gfx_r = 0.5; gfx_g = 0.3; gfx_b = 0.0; gfx_a = 0.6;
+
+slider14 > -1 ? (
+  gfx_r=0.0; gfx_g = 0.7; gfx_b = 0.9; gfx_a = 0.6;
+  ):(
+  gfx_r=0.65; gfx_g = 0.27; gfx_b = 0.0; gfx_a = 0.6;
+  );
+
+/*
+help > 0 ? (
+  gfx_x = field1x-meterw*0.5-gfx_texth*0.6;
+  gfx_y = field1hi+gfx_texth*0.0;
+  //gfx_a *= 0.4;
+  play_state == 0 ? gfx_drawstr("GR");
+  //gfx_a /= 0.4;
+  );
+*/  
+bypass1 == 0 ? (
+  gfx_x = field1x - meterw;
+  gfx_y = field1hi - log10(gr_meter^3)*yscale;
+  gfx_y > field1hi+gfx_ext_retina * 3 ?
+    gfx_rectto(field1x , field1hi+gfx_ext_retina * 3);
+  );
+
+
+// Draw SC meter action
+gfx_yg = field1hi - (log10(sc_meter+0.000001)*yscale) / 1 ;
+//gfx_yg = field1hi - (log10(bpv+0.000001)*yscale) / 1 ;
+gfx_yt = field1hi - (log10(threshv)*yscale) / 1 ;
+
+/*
+gfx_yc = gfx_h + (log10(sc_metercv)*yscale) / 2 ;
+gfx_y_ = gfx_h + (log10(sc_meter)*yscale) / 2 ;
+gfx_hh = gfx_h;
+*/
+
+
+// Main in meter
+
+    gfx_r = 1; gfx_g = 0.95; gfx_b = 1; gfx_a = 0.28;       // Main input meter color
+    
+/*
+    help > 0 ? (
+      gfx_x = field1x+meterw*0.5-gfx_texth*0.6;
+      gfx_y = field1hi+gfx_texth*0.3;
+      //gfx_a *= 0.4;
+      play_state == 0 ? gfx_drawstr("in");
+      //gfx_a /= 0.4;
+      );
+*/    
+    
+    gfx_x = field1x;
+    gfx_y = field1lo2 - pad * 0.5  ;
+/*
+    gfx_rectto( field1x + meterw ,min(field1lo,max( gfx_yt , gfx_yg )));
+    gfx_r = 0.2; gfx_g = 0.5; gfx_b = 0; gfx_a = 0.45;
+    gfx_y = gfx_yt+1;
+
+    gfx_yt > gfx_yg ? (
+*/
+    bypass1 == 0 ? (
+      gfx_rectto( field1x+meterw , min( gfx_yg , field1lo ) );
+      );
+//      gfx_x -= gfx_ext_retina*2;
+//      gfx_r = gfx_g = gfx_b = gfx_a = 0.9 ;
+//      gfx_lineto(field1x + gfx_ext_retina , gfx_yg);
+//      );
+
+/*
+sc_peak == 1 || sc_peak_timer < 10 ? (
+  gfx_r=1; gfx_g=0.0; gfx_b=0.0; gfx_a=1;       
+  gfx_x = field1x + gfx_texth * 0.75;
+  gfx_y = field1hi + pad;
+  gfx_rectto (  field1x + field1w * 0.5 - gfx_texth * 1.5 , field1hi - pad );
+  sc_peak_timer += 1;
+  );
+sc_peak == 1 ? sc_peak_timer = 0;
+*/
+
+
+//                                              Field 1 meter top line
+//  gfx_lineto(field1x + meterw , field1hi );
+  gfx_r= 0.7 ; gfx_g= 0.4 ; gfx_b=0.6; gfx_a=1;
+  gfx_x = field1x - field1w/2;
+  gfx_y = field1hi;
+  gfx_lineto(field1x + field1w/2 , field1hi );
+  gfx_x+=3.3*gfx_ext_retina;
+  gfx_y -= gfx_texth*0.45;
+
+
+
+
+
+
+
+
+
+//////////// BAND 2 FREQUENCY FIELD
+
+//Moved:
+//fscale2 = (log(1.0+(freq2/srate*2.0)*400)*wsc2)  - wsc2*0.2;
+
+
+//field2x < field1x + field1w /2 + field2w / 2 ? field2x = field1x + field1w /2 + field2w / 2;
+//freq2 < freq ? 
+
+// moved above FIGHT
+//field2w = max(gfx_w / 7 * ( width2^1.4 / 5 + 0.8), gfx_texth*5.5 );
+field2h = gfx_h / 3 * 2;
+field2hi = gfx_texth * 2.8;
+field2lo = gfx_h2 - but_h * 0.2 ;
+//showothers > 0 ? field2lo -= but_h *0.8;
+
+//f2labx = min(fscale2 , gfx_w - gfx_texth*3.7);
+
+
+// Field 2 background:
+
+gfx_r = 0.01 ; gfx_g = 0.15 ; gfx_b = 0.0;
+gfx_a = 0.75; 
+
+
+field2xa == field2xa_ ?
+  field2xc = field2xa + but_h * 0.7:
+  field2xc = field2xa ;
+
+field2xb == field2xb_ ?
+  field2xd = field2xb - but_h * 0.7:
+  field2xd = field2xb ;
+
+field2ya = field2hi + but_h * 1.3;
+field2yb = field2lo - but_h * 1.4;
+
+gfx_x = field2xa;
+gfx_y = field2hi;
+
+gfx_rectto ( field2xb , field2ya );
+gfx_rectto ( field2xd , field2yb );
+gfx_x = field2xb;
+gfx_y = field2lo-pad*0.5;
+gfx_rectto ( field2xa , field2yb-1 );
+gfx_rectto ( field2xc , field2ya );
+
+
+// FREQ 2 MODE COLORS
+
+mode2 >= 1 ? (
+mode2 < 2 ? (gfx_r = 0.0; gfx_g = 0.45; gfx_b = 0.0; gfx_a=0.2;) :
+mode2 < 3 ? (gfx_r = 0.55; gfx_g = 0.4; gfx_b = 0.0; gfx_a=0.3;) :
+mode2 < 4 ? (gfx_r = 0.1; gfx_g = 0.25; gfx_b = 0.9; gfx_a=0.3;) :
+mode2 < 5 ? (gfx_r = 0.65; gfx_g = 0.05; gfx_b = 0.0; gfx_a=0.3;) ;
+
+gfx_x = field2xc;
+gfx_y = field2ya;
+gfx_rectto(field2xd , field2yb);
+);
+
+
+// Field 2 Border:
+
+gfx_r = 0.18 ; gfx_g = 0.33 ; gfx_b = 0.05;
+gfx_a = 0.5; 
+
+//pad = gfx_ext_retina * 3;
+
+
+gfx_x = field2x - field2w /2 - pad;
+gfx_y = field2hi - pad;
+gfx_rectto (field2x + field2w /2 + pad, field2hi + pad * 3 );
+gfx_rectto (field2x + field2w /2 - pad, field2lo + pad * 1 );
+gfx_rectto (field2x - field2w /2 - pad, field2lo - pad * 2 );
+gfx_rectto (field2x - field2w /2 + pad, field2hi - pad);
+
+
+
+
+
+// dB meter scale 2
+
+meterw2 = gfx_texth*0.5 + field2w *0.2;
+
+  gfx_r= 0.4 ; gfx_g= 0.7 ; gfx_b=0.6; gfx_a=1;
+
+  s2=sqrt(2)/2;
+  g2 = s2;
+//  gfx_x = field2x - field2w *0.3;
+//  gfx_y = field2hi;
+//  gfx_lineto(field1x + field1w /8 , field1hi );
+
+//  gfx_x+=3.3*gfx_ext_retina;
+//  gfx_y -= gfx_texth*0.45;
+
+
+  while(
+    gfx_y < gfx_h*0.855 ? (
+//                                                    Top height of dB meter lines
+      gfx_x = field2x - meterw2;
+      gfx_y = field2hi + log10(g2)*-yscale2;
+
+
+
+  gfx_r= 0.4 ; gfx_g= 0.6 ; gfx_b=0.6; gfx_a=1;
+
+//      gfx_lineto( field2x + meterw ,gfx_y);
+      gfx_x = field2x - meterw2 + gfx_ext_retina*4;
+      gfx_lineto( field2x -gfx_ext_retina*4 ,gfx_y);
+      gfx_x = field2x +gfx_ext_retina*4;
+      gfx_lineto( field2x-gfx_ext_retina*4 + meterw2 ,gfx_y);
+
+
+
+      );
+
+    gfx_y < field2lo - gfx_texth * 1.7 ? (
+
+      numbersx2 = gfx_x + gfx_texth*0.1;
+      gfx_x = min(numbersx2, field2x + field2w /2 - gfx_texth*1.5);
+      gfx_y -= gfx_texth*0.55;
+  gfx_r= gfx_g=gfx_b=1; gfx_a=0.4;
+
+      gfx_x > field2x ? (
+
+
+        db2scdiv = 1;
+        while(db2scdiv < 9)(
+          floor(log10(g2)*20/db2scdiv *10 + 0.5) == -60 ?
+          gfx_drawnumber(log10(g2)*20,0);
+          db2scdiv += 1;
+          );
+        );
+        
+ // GR scale 2 numbers
+
+      gfx_a += 0.2;
+      number2 =  log10(sqrt(g2))*20 /3*2;
+      
+      slider24 > -1 ? (
+        gfx_x = field2x - gfx_texth*1.1 - field2w *0.2 ;
+
+        gr2div = 1;
+        while(gr2div <= 3)(
+          floor((-number2/gr2div)*10+0.5) == 30 ?
+          gfx_drawnumber(-number2,0);
+          gr2div += 1;
+          );
+                
+        ):(
+        gfx_x = field2x - gfx_texth*1.4 - field2w *0.2 ;
+
+        gr2div2 = 1;
+        while(gr2div2 <= 3)(
+          floor((-number2/gr2div2)*10+0.5) == 30 ?
+          gfx_drawnumber(number2,0);
+          gr2div2 += 1;
+          );
+        
+
+        );
+
+//      gfx_y=meter_h;             //SC dB scale
+//      gfx_x-=gfx_w/12 - 21 ;                 //SC dB scale -3 x-location
+//      gfx_x-=16 ;                 //SC dB scale -6 x-location
+//      gfx_x < gfx_w*0.45 ? ( gfx_x-=gfx_w/55 ); //SC dB scale X when below 0.6 width
+//      (log10(g)*20) < -10 ? ( gfx_x-=8 ); //SC dB X when GR below -10
+//      gfx_drawnumber(log10(g)*40,0);
+
+      gfx_a -= 0.2;
+
+        );
+
+
+      g2*=s2;
+    );
+
+
+
+
+// GR Meter 2
+
+slider24 > -1 ? (
+  gfx_r=0.0; gfx_g = 0.7; gfx_b = 0.9; gfx_a = 0.6;
+  ):(
+  gfx_r=0.67; gfx_g = 0.25; gfx_b = 0.0; gfx_a = 0.6;
+  );
+
+/*
+help > 0 ? (
+  gfx_x = field2x-meterw*0.5-gfx_texth*0.6;
+  gfx_y = field2hi+gfx_texth*0.3;
+  //gfx_a *= 0.4;
+  play_state == 0 ? gfx_drawstr("GR");
+  //gfx_a /= 0.4;
+  );
+*/
+
+bypass2 == 0 ? (
+  gfx_x = field2x - meterw2;
+  gfx_y = field2hi - log10(gr_meter2^3)*yscale2;
+  gfx_y > field2hi+gfx_ext_retina * 3 ?
+    gfx_rectto(field2x , field2hi+gfx_ext_retina * 3);
+//    );
+
+// Draw SC meter 2 action
+gfx_yg2 = field2hi - (log10(sc_meter2+0.000001)*yscale2) / 1 ;
+gfx_yt2 = field2hi - (log10(threshv2)*yscale2) / 1 ;
+
+// Main in meter 2
+
+    gfx_r = 0.8; gfx_g = 0.9 ; gfx_b = 1; gfx_a = 0.3;       // Main input meter color
+
+/*
+    help > 0 ? (
+      gfx_x = field2x+meterw*0.5-gfx_texth*0.6;
+      gfx_y = field2hi+gfx_texth*0.3;
+      //gfx_a *= 0.4;
+      play_state == 0 ? gfx_drawstr("in");
+      //gfx_a /= 0.4;
+      );
+*/
+
+
+//    gfx_r = 0.0; gfx_g = 0.3; gfx_b = 0.6; gfx_a = 0.45;
+    gfx_x = field2x;
+    gfx_y = field2lo2 - pad * 0.5 ;
+//    gfx_rectto( field2x + meterw2 ,min(field2lo,max( gfx_yt2 , gfx_yg2 )));
+//    gfx_r = 0.0; gfx_g = 0.4; gfx_b = 0.6; gfx_a = 0.5;
+    
+//    gfx_y = gfx_yt2+1;
+//    gfx_yt2 > gfx_yg2 ? (
+      gfx_rectto( field2x + meterw2 , min( gfx_yg2 , field2lo - pad * 0.5 ) );
+      );
+
+
+
+
+//                                              Field 2 meter top line
+//  gfx_lineto(field1x + meterw , field1hi );
+  gfx_r= 0.4 ; gfx_g= 0.7 ; gfx_b=0.6; gfx_a=1;
+  gfx_x = field2x - field2w/2;
+  gfx_y = field2hi;
+  gfx_lineto(field2x + field2w/2 , field2hi );
+  gfx_x+=3.3*gfx_ext_retina;
+  gfx_y -= gfx_texth*0.45;
+
+
+
+
+// Graph buttons field
+/*
+gfx_r = gfx_g = gfx_b = 0.05 ; gfx_a = 1;
+gtextx < 50 ? (
+  gfx_x = gfx_w - gfx_texth * 16;
+  ) : (
+  gfx_x = gtextx - gfx_texth * 0.3;
+  );
+gfx_y = 0;
+gfx_rectto( gfx_w , gfx_texth * 1.55);
+*/
+
+but_h = gfx_texth * 1.14;
+
+roof <= 1 ?
+roof_button.draw_button(gfx_w-gfx_ext_retina*0, 0,
+  sprintf(#,"   %d  ",6-roof*6)):
+roof > 2 ?
+roof_button.draw_button(gfx_w-gfx_ext_retina*0, 0, sprintf(#," -%d ",roof*6-6)):
+roof_button.draw_button(gfx_w-gfx_ext_retina*0, 0, sprintf(#,"  -%d  ",roof*6-6));
+
+slider10 == 0 ? (
+  fft_button.draw_button(gfx_x, 0, sprintf(#,"   Off  ",1024<<slider1));
+  ):(
+  fft_button.draw_button(gfx_x, 0, sprintf(#," %d ",1024<<slider1));
+  );
+  
+gtextx = gfx_x;
+
+slope_button.draw_button(gfx_x-gfx_ext_retina*0, 0, sprintf(#," \\ %.1f ",slider6));
+
+
+intx= gfx_w*0.74;
+slider5 < 10 ? 
+  integrate_button.draw_button(intx,0, sprintf(#,"   %dms  ",slider5|0)):
+  slider5 < 100 ?
+    integrate_button.draw_button(intx,0, sprintf(#,"  %dms ",slider5|0)):    
+    slider5 == 10000 ? 
+      integrate_button.draw_button(intx,0, sprintf(#,"  %.0f s   ",slider5/1000)):
+      slider5>=5000 ? 
+        integrate_button.draw_button(intx,0, sprintf(#,"   %.0f s    ",slider5/1000+0.00001)):
+        slider5>=1000 ? 
+          integrate_button.draw_button(intx,0, sprintf(#,"  %.1f s  ",slider5/1000+0.00001)):
+          integrate_button.draw_button(intx,0, sprintf(#," %dms",slider5|0));
+
+//gtextx2 = gtextx - gfx_texth*2.8 - gfx_ext_retina*0;
+modx = intx - gfx_texth*2.8;
+modeana < 1 ?
+modeana_button.draw_button(modx, 0, sprintf(#,"  Stereo  ",slider8)):
+modeana < 2 ?
+modeana_button.draw_button(modx, 0, sprintf(#,"    Mid    ",slider8)):
+modeana < 3 ?
+modeana_button.draw_button(modx, 0, sprintf(#,"    Side   ",slider8)):
+modeana < 4 ?
+modeana_button.draw_button(modx, 0, sprintf(#,"  L         ",slider8)):
+modeana < 5 ?
+modeana_button.draw_button(modx, 0, sprintf(#,"         R  ",slider8));
+
+
+/*
+roof <= 1 ?
+roof_button.draw_button(gfx_w-gfx_ext_retina*2, gfx_y + gfx_texth * 1.5,
+  sprintf(#,"Max   %d dB",6-roof*6)):
+
+roof == 2 ?
+//roof_button.draw_button(gfx_w, 5, sprintf(#,"Max - %d dB",roof*6-6)):
+roof_button.draw_button(gfx_w-gfx_ext_retina*2, 5, sprintf(#,"Max -%ddB",roof*6-6));
+*/
+
+
+
+
+
+//floor_button.draw_button(gfx_w-10, 5, sprintf(#,"Min -%.0fdB",slider2));
+floor_button.draw_button(gfx_w-gfx_ext_retina*0, gfx_y + but_h,
+  sprintf(#," -%.0f ",slider2));
+
+
+
+  update || old_w != gfx_w || old_h!=gfx_h? (
+  old_w=gfx_w; old_h=gfx_h;
+  gfx_r=gfx_g=gfx_b=0; gfx_a=1;
+  gfx_x=gfx_y=0;
+  );
+
+
+
+
+  
+
+/*
+gfx_x = gfx_texth * 0;
+gfx_y = gfx_h - gfx_texth*1.15;
+
+gfx_r = gfx_b = gfx_g = 0.6; gfx_a = 0.8 ;
+gfx_drawstr(" Others':");
+*/
+
+
+
+
+////////// FREQ 1 BUTTONS:
+function draw_button(xp, yp, str) 
+  instance(w,h,x,y) 
+  globals(gfx_r,gfx_g,gfx_b,gfx_x,gfx_y) 
+  (gfx_measurestr(str, w, h);
+  xp -= w+3;
+  x=xp;
+  y=yp;
+  gfx_set(0.18, 0.04, 0, 0.85);  // Freq 1 button background color
+  w+=3;
+  h+=3;
+  gfx_rect(x,y,w,h);
+  gfx_set(.9,.8,.7, 0.8);  // Freq 1 button rectangle color
+  gfx_line(x,y,x+w,y);
+  gfx_line(x+w,y,x+w,y+h);
+  gfx_line(x,y+h,x+w,y+h);
+  gfx_line(x,y,x,y+h);
+  h+=1;
+  w+=1;
+  gfx_x=xp+2; gfx_y=yp+2;
+  gfx_set(1,.9,.85,1);  // Freq 1 button text color
+  gfx_drawstr(str);
+  gfx_x = xp;
+  );
+
+
+/*
+  update || old_w != gfx_w || old_h!=gfx_h? (
+  old_w=gfx_w; old_h=gfx_h;
+  gfx_r=gfx_g=gfx_b=0; gfx_a=1;
+  gfx_x=gfx_y=0;
+  );
+
+ */
+
+//////// BAND 1 BUTTONS /////////////////////////////////////
+
+//moved:
+//f1labx = min(fscale , gfx_w - gfx_texth*3.7);
+freq < 100 ? (
+freq_button.draw_button(f1labx + gfx_texth*1.3 , field1hi - gfx_texth * 1.5 ,
+  sprintf(#," %.0f Hz ",freq));
+  ):(
+  freq >=1000 ? (
+    freq_button.draw_button(f1labx + gfx_texth*1.85 , field1hi - gfx_texth * 1.5 ,
+     sprintf(#," %.0f Hz ",freq));
+    ):(
+    freq_button.draw_button(f1labx + gfx_texth*1.58 , field1hi - gfx_texth * 1.5 ,
+    sprintf(#," %.0f Hz ",freq));
+    );
+  );
+
+/*
+function drag_slider(x, y, z, dx)
+  globals(mouse_y, cap_last_y, cap_drag)
+(
+  x = min(max(x + dx * (cap_last_y-mouse_y),y),z);
+  cap_last_y=mouse_y;
+  cap_drag=1;
+  x;
+);
+
+*/
+opto1_button.draw_button(max(but_h,field1x - field1w /2 + gfx_texth *1.03 ), field1lo2 - but_h*3.4 ,
+  sprintf(#," • ",slider32));
+
+
+
+//mode1_button.draw_button(field1x + field1w*0.1 , field1lo - gfx_texth*1.4 ,
+//  sprintf(#,"%d>",slider31));
+mode1x = field1x + gfx_texth *0.45;
+mode1y = field1lo2 - gfx_texth*1.15;
+
+mode1 < 1 ? (
+mode1_button.draw_button(mode1x - gfx_texth*0.1 , mode1y , sprintf(#," ST ",mode1txt));
+  ):(
+  mode1 < 2 ? (
+    mode1_button.draw_button(mode1x- gfx_texth*0.0 , mode1y , sprintf(#," Mid ",mode1txt));
+    ):(
+    mode1 < 3 ? (
+      mode1_button.draw_button(mode1x +gfx_texth*0.1 , mode1y , sprintf(#," Side ",mode1txt));
+      ):(
+      mode1 < 4 ? (
+      mode1_button.draw_button(mode1x - gfx_texth*0.2, mode1y , sprintf(#,"  L  ",mode1txt));
+        ):(
+        mode1 < 5 ? (
+        mode1_button.draw_button(mode1x - gfx_texth*0.1, mode1y , sprintf(#,"  R  ",mode1txt));
+          );
+        );
+      );
+    );
+  );
+        
+  
+width_button.draw_button(min(gfx_w-but_h*0.1,field1x + field1w/2 ), field1hi ,
+  sprintf(#," %.1f",slider12));
+
+steep1_xb = gfx_x;
+steep1_ya = gfx_y;
+
+steep1_button.draw_button(gfx_x , field1hi ,
+  sprintf(#," V ",slider19));
+  
+steep1_xa = gfx_x;
+steep1_yb = gfx_y + gfx_texth * 1.1;
+
+steep1 == 0 ? (
+  gfx_x = steep1_xa + gfx_ext_retina* 1;
+  gfx_y = steep1_ya + gfx_ext_retina* 0;
+  gfx_r = gfx_g = gfx_b = 0.0; gfx_a = 0.6 ;
+//  gfx_rectto(gfx_x += gfx_texth*0.5, gfx_y += gfx_texth);
+  gfx_rectto(steep1_xb - gfx_ext_retina* 1, steep1_yb - gfx_ext_retina* 0);
+  );
+////////
+
+autorelmeter1 = (slider15 +
+  min(60 , slider15*0.5 + (5-log10(freq))^1.1 * (slider15/15+0.33) * 10 -20) );
+
+autorelmeter2 = (slider25 +
+  min(60 , slider25*0.5 + (5-log10(freq2))^1.1 * (slider25/15+0.33) * 10 -20) );
+
+
+slider14 > -1 ? autorelmeter1 = reltime*1000;
+
+autorelmeter1 >= 100 ? (
+  release_button.draw_button(max(but_h*1.35,field1x - field1w /2 + gfx_texth *1.48 ), 
+    field1lo2 - but_h *2.2 , sprintf(#,"%.0f",autorelmeter1));
+  ):(
+  autorelmeter1 < 10 ? (
+    release_button.draw_button(max(but_h*0.95,field1x - field1w /2 + gfx_texth *1.0 ), 
+      field1lo2 - but_h *2.2 , sprintf(#," %.0f ",autorelmeter1));
+    ):(    
+    release_button.draw_button(max(but_h*0.95,field1x - field1w /2 + gfx_texth *1.0 ), 
+      field1lo2 - but_h *2.2 , sprintf(#,"%.0f",autorelmeter1));
+    );
+  );  
+    
+attime >= 0.01 ? (
+  attack_button.draw_button(max(but_h*1.65,field1x - field1w /2 + gfx_texth *1.8 ),
+    field1lo2 - but_h *1.0, sprintf(#,"%.1f",attime*1000));
+  ) : (
+  attack_button.draw_button(max(but_h*1.25,field1x - field1w /2 + gfx_texth *1.3 ), 
+  field1lo2 - but_h *1.0, sprintf(#,"%.1f",attime*1000));
+  );
+
+ratxtop = max(but_h*1.52,field1x - field1w /2 + gfx_texth *1.65 );
+ratx = max(but_h*1.95,field1x - field1w /2 + gfx_texth *2.1 );
+ratytop = field1hi + but_h*1.05;
+//      top                       curve                   scale height
+raty = field1hi + but_h*1.05 + ((-slider14-1)/11)^0.65 * (field1lo-field1hi-but_h*4.53);
+
+slider14 == -12 ? (
+  ratio_button.draw_button(ratx , raty , sprintf(#,":%.0f",-slider14));
+  ) : (
+  slider14 <= -10 ? (
+    ratio_button.draw_button(ratx , raty , sprintf(#,":%.1f",-slider14));
+    ) : (
+    slider14 > -1 ? (
+      ratio_button.draw_button(ratxtop , ratytop , sprintf(#,":%.1f",-slider14));
+      ) : (
+      ratio_button.draw_button(ratxtop ,
+  //    field1hi + but_h + ((-slider14-1)/11)^0.65 * (field1lo-field1hi-gfx_texth*5) ,
+      ratytop + (max(0,-slider14-1.15)/11)^0.65 * (field1lo-field1hi-gfx_texth*5) ,
+      sprintf(#,":%.1f",-slider14));
+      );
+    );
+  );
+
+gain_button.draw_button(min(gfx_w-but_h*0.1,field1x + field1w /2 - but_h *0.0 ), field1lo2 - but_h ,
+  sprintf(#,"%.1f dB",slider13));
+
+bypass1_button.draw_button(max(but_h*1,field1xa + but_h*0.9 ), field1hi - gfx_texth *0.0 ,
+  sprintf(#," X ",slider18));
+
+solo1_button.draw_button(max(but_h*2.05,field1xa + but_h*2 ), field1hi ,
+  sprintf(#," S ",slider35));  
+
+mode1 >= 1 ? thr1loy = field1lo2 - but_h * 3.15 : thr1loy = field1lo2 - but_h * 2.1 ;
+
+
+
+//field1w < 200 || field1x < 92 || field1x > 965 ?
+field1w < but_h*6 || field1x < but_h * 2.9 || field1x > gfx_w - but_h*3.2 ?
+thresytop = field1hi + but_h : thresytop = field1hi;
+
+//      uppest allowed           offset                         actual formula      
+thresy = max(thresytop , min(field1hi-gfx_texth*0.6 - log10(threshv_gfx)*yscale
+ , thr1loy+but_h*0.05));
+// lowest allowed
+
+thresh == 0 ? (
+thresh_button.draw_button(field1x + but_h * 0.75 , thresy ,
+  sprintf(#," %.1f ",thresh));
+  ):(
+  thresh <= -10 ? (
+//thresh_button.draw_button(field1x + but_h * 0.5 + (80+thresh)/250*but_h, thresy ,
+thresh_button.draw_button(field1x + but_h * 1.1, thresy ,
+  sprintf(#,"%.1f ",thresh));
+  ):(
+  thresh_button.draw_button(field1x + but_h * 0.75 , thresy ,
+    sprintf(#,"%.1f ",thresh));
+    
+  );
+);
+
+//        slider range               elevation     curve
+low1y1 = (field1lo2+field1hi)*0.49 - but_h*0.35 - ((field1lo2-field1hi-gfx_texth*3.5)/18)*(slider20);
+
+// Help button on the way?
+(field1xb > (gfx_w - but_h*1.25)) && showothers == 0 ? (low1y = field1lo-but_h*3.2)
+: (low1y = field1lo-but_h*1);
+
+band1in_button.draw_button(min(gfx_w-but_h*0.1,field1x + field1w /2) , min(low1y1,low1y) ,
+//  field1lo -gfx_texth*2.3 - (field1h-gfx_texth*2)/18*(slider20+9)  ,
+//  field1lo -gfx_texth*0.5 -field1h*0.55 - (field1h-gfx_texth)/18*(slider20)  ,
+  sprintf(#,">%.1f",slider20));
+
+
+
+mode1 >= 1 ? (
+  slider33 < 10 ? (
+    blend1_button.draw_button(blend1x = field1x+but_h* 0.4
+    , field1lo2-but_h*2.05 , sprintf(#," %.0f""\%%",slider33));
+    ):(
+    blend1_button.draw_button(blend1x = field1x+but_h* 0.4
+    , field1lo2-but_h*2.05 , sprintf(#,"%.0f""\%%",slider33));
+    );
+  );
+
+
+  
+
+
+/////// FREQ 2 BUTTONS:  
+
+function draw_button(xp, yp, str) 
+  instance(w,h,x,y) 
+  globals(gfx_r,gfx_g,gfx_b,gfx_x,gfx_y) 
+(
+  gfx_measurestr(str, w, h);
+  xp -= w+3;
+  x=xp;
+  y=yp;
+//  gfx_set(0.04,0.18,0,0.8);                // Freq 2 Button background color
+  gfx_set(0.06,0.13,0,0.85);                // Freq 2 Button background color
+  w+=3;
+  h+=3;
+  gfx_rect(x,y,w,h);
+  gfx_set(.85,.85,.75, 0.7);                     // Freq 2 Button rectangle color
+  gfx_line(x,y,x+w,y);
+  gfx_line(x+w,y,x+w,y+h);
+  gfx_line(x,y+h,x+w,y+h);
+  gfx_line(x,y,x,y+h);
+  h+=1;
+  w+=1;
+  gfx_x=xp+2; gfx_y=yp+2;
+  gfx_set(.9,.95,.9, 1);                     // Freq 2 Button text color
+  gfx_drawstr(str);
+  gfx_x = xp;
+);
+
+
+
+/////// Band 2: /////////////////////////////////////////
+
+
+freq2 < 100 ? (
+freq2_button.draw_button(f2labx + gfx_texth*1.3 , field2hi - gfx_texth * 1.5 ,
+  sprintf(#," %.0f Hz ",freq2));
+  ):(
+  freq2 >=1000 ? (
+    freq2_button.draw_button(f2labx + gfx_texth*1.85 , field2hi - gfx_texth * 1.5 ,
+     sprintf(#," %.0f Hz ",freq2));
+    ):(
+    freq2_button.draw_button(f2labx + gfx_texth*1.58 , field2hi - gfx_texth * 1.5 ,
+    sprintf(#," %.0f Hz ",freq2));
+    );
+  );
+
+
+opto2_button.draw_button(max(but_h,field2x - field2w /2 + gfx_texth *1.03) , field2lo2 - but_h * 3.4 ,
+  sprintf(#," • ",slider42));
+
+
+mode2x = field2x + gfx_texth *0.45;
+mode2y = field2lo2 - gfx_texth*1.15;
+
+mode2 < 1 ? (
+mode2_button.draw_button(mode2x - gfx_texth*0.1 , mode2y , sprintf(#," ST ",mode2txt));
+  ):(
+  mode2 < 2 ? (
+    mode2_button.draw_button(mode2x- gfx_texth*0.0 , mode2y , sprintf(#," Mid ",mode2txt));
+    ):(
+    mode2 < 3 ? (
+      mode2_button.draw_button(mode2x +gfx_texth*0.1 , mode2y , sprintf(#," Side ",mode2txt));
+      ):(
+      mode2 < 4 ? (
+      mode2_button.draw_button(mode2x - gfx_texth*0.2, mode2y , sprintf(#,"  L  ",mode2txt));
+        ):(
+        mode2 < 5 ? (
+        mode2_button.draw_button(mode2x - gfx_texth*0.1, mode2y , sprintf(#,"  R  ",mode2txt));
+          );
+        );
+      );
+    );
+  );
+
+
+width2_button.draw_button(min(gfx_w-but_h*0.1,field2x + field2w/2 ), field2hi ,
+  sprintf(#," %.1f",slider22));
+
+//thresh_button.draw_button(gfx_w/2+18 , meter_h-10 + (gfx_h-meter_h-30)*(-thresh/60),
+//  sprintf(#,"%.1f",slider17));
+
+steep2_xb = gfx_x;
+steep2_ya = gfx_y;
+
+
+steep2_button.draw_button(gfx_x , field2hi ,
+  sprintf(#," V ",slider29));
+  
+steep2_xa = gfx_x;
+steep2_yb = gfx_y + gfx_texth * 1.1;
+
+steep2 == 0 ? (
+  gfx_x = steep2_xa + gfx_ext_retina* 1;
+  gfx_y = steep2_ya + gfx_ext_retina* 0;
+  gfx_r = gfx_g = gfx_b = 0.0; gfx_a = 0.6 ;
+//  gfx_rectto(gfx_x += gfx_texth*0.5, gfx_y += gfx_texth);
+  gfx_rectto(steep2_xb - gfx_ext_retina* 1, steep2_yb - gfx_ext_retina* 0);
+  );
+
+
+slider24 > -1 ? autorelmeter2 = reltime2*1000;
+
+
+autorelmeter2 >= 100 ? (
+  release2_button.draw_button(max(but_h*1.35,field2x - field2w /2 + gfx_texth *1.48 ),
+    field2lo2 - but_h * 2.2 , sprintf(#,"%.0f",autorelmeter2));
+  ) : (
+  autorelmeter2 < 10 ? (
+  
+    release2_button.draw_button(max(but_h*0.95,field2x - field2w /2 + gfx_texth *1.0) ,
+      field2lo2 - but_h * 2.2 , sprintf(#," %.0f ",autorelmeter2));
+    ) : (
+    release2_button.draw_button(max(but_h*0.95,field2x - field2w /2 + gfx_texth *1.0) ,
+      field2lo2 - but_h * 2.2 , sprintf(#,"%.0f",autorelmeter2));
+    );
+  );
+
+attime2 >= 0.01 ? (
+  attack2_button.draw_button(max(but_h*1.65,field2x - field2w /2 + gfx_texth *1.8 ),
+    field2lo2 -  but_h *1.0, sprintf(#,"%.1f",attime2*1000));
+  ) : (
+  attack2_button.draw_button(max(but_h*1.25,field2x - field2w /2 + gfx_texth *1.3 ),
+    field2lo2 -  but_h *1.0, sprintf(#,"%.1f",attime2*1000));
+  );
+
+
+ratxtop2 = max(but_h*1.52,field2x - field2w /2 + gfx_texth *1.65 );
+ratx2 = max(but_h*1.95,field2x - field2w /2 + gfx_texth *2.1 );
+ratytop2 = field2hi + but_h*1.05;
+//      top                       curve                   scale height
+raty2 = field2hi + but_h*1.05 + ((-slider24-1)/11)^0.65 * (field2lo-field2hi-but_h*4.53);
+
+slider24 == -12 ? (
+  ratio2_button.draw_button(ratx2 , raty2 , sprintf(#,":%.0f",-slider24));
+  ) : (
+  slider24 <= -10 ? (
+    ratio2_button.draw_button(ratx2 , raty2 , sprintf(#,":%.1f",-slider24));
+    ) : (
+    slider24 > -1 ? (
+      ratio2_button.draw_button(ratxtop2 , ratytop2 , sprintf(#,":%.1f",-slider24));
+      ) : (
+      ratio2_button.draw_button(ratxtop2 ,
+  //    field2hi + but_h + ((-slider24-1)/11)^0.65 * (field2lo-field2hi-gfx_texth*5) ,
+      ratytop2 + (max(0,-slider24-1.15)/11)^0.65 * (field2lo-field2hi-gfx_texth*5) ,
+      sprintf(#,":%.1f",-slider24));
+      );
+    );
+  );
+
+
+gain2_button.draw_button(min(gfx_w-but_h*0.1,field2x + field2w /2 - but_h *0.0) , field2lo2 - but_h ,
+  sprintf(#,"%.1f dB",slider23));
+
+//bypass2_button.draw_button(max(but_h*1,field2xa + but_h*0.92 ), field2hi - gfx_texth *0.0 ,
+//  sprintf(#," X ",slider28));
+bypass2_button.draw_button(max(but_h*1,field2xa + but_h*0.9 ), field2hi - gfx_texth *0.0 ,
+  sprintf(#," X ",slider28));
+
+solo2_button.draw_button(max(but_h*2.05,field2xa + but_h*2 ), field2hi ,
+  sprintf(#," S ",slider36));
+
+
+mode2 >= 1 ? thr2loy = field2lo2 - but_h * 3.15 : thr2loy = field2lo2 - but_h * 2.1 ;
+
+
+
+field2w < but_h*6 || field2x < but_h * 2.9 || field2x > gfx_w - but_h*3.2 ?
+thresytop2 = field2hi + but_h : thresytop2 = field2hi;
+
+//      uppest allowed           offset                         actual formula      
+thresy2 = max(thresytop2 , min(field2hi-gfx_texth*0.6 - log10(threshv2_gfx)*yscale2
+ , thr2loy+but_h*0.05));
+// lowest allowed
+
+thresh2 == 0 ? (
+  thresh2_button.draw_button(field2x + but_h * 0.75 , thresy2 , sprintf(#," %.1f ", thresh2));
+  ):(
+  thresh2 <= -10 ? (
+    thresh2_button.draw_button(field2x + but_h * 1.1, thresy2 , sprintf(#,"%.1f ", thresh2));
+    ):(
+    thresh2_button.draw_button(field2x + but_h * 0.75 , thresy2 , sprintf(#,"%.1f ", thresh2));
+    );
+  );
+
+
+
+
+low2y1 = (field2lo2+field2hi)*0.49 - but_h*0.35 - ((field2lo2-field2hi-gfx_texth*3.5)/18)*(slider30);
+(field2xb > (gfx_w - but_h*1.25)) && showothers == 0 ? (low2y = field2lo2-but_h*3.1)
+  : (low2y = field2lo2-but_h*1);
+
+  
+band2in_button.draw_button(min (gfx_w-but_h*0.1,field2x + field2w /2) , min(low2y1,low2y) ,
+ sprintf(#,">%.1f",slider30));
+ 
+
+
+mode2 >= 1 ? (
+  slider34 < 10 ? (
+    blend2_button.draw_button(blend2x = field2x+but_h* 0.4
+    , field2lo2-but_h*2.05 , sprintf(#," %.0f""\%%",slider34));
+    ):(
+    blend2_button.draw_button(blend2x = field2x+but_h* 0.4
+    , field2lo2-but_h*2.05 , sprintf(#,"%.0f""\%%",slider34));
+    );
+  );
+
+
+// PRESS BUTTONS SHADE SQUARE RECTANGLE BOX
+  
+bypass1 == 1 ? (
+  gfx_r = gfx_g = gfx_b = 0.0; gfx_a = 0.6 ;
+  solo1 ? gfx_a = 0.4;
+
+  gfx_x = field1xa - gfx_ext_retina*2;
+  gfx_y = field1hi + but_h*1.1;
+  gfx_rectto(field1x + field1w/2 +pad+1, field1lo+pad+1);
+  
+  gfx_x = max(gfx_ext_retina*1,field1xa) + but_h * 2.05;
+  gfx_y = field1hi + but_h*1.1;
+  gfx_rectto(field1xb + gfx_ext_retina*2, field1hi - gfx_ext_retina*2);
+ 
+  gfx_a = 0.6;
+  ):(
+  gfx_r = gfx_g = gfx_b = 0.0; gfx_a = 0.6;
+  gfx_x = max(gfx_ext_retina*1,field1xa); gfx_y = field1hi + gfx_ext_retina*1;
+  gfx_rectto(gfx_x + but_h*0.85 , gfx_y + but_h*0.95);  
+  );
+  
+  
+bypass2 == 1 ? (
+
+  gfx_r = gfx_g = gfx_b = 0.0; gfx_a = 0.6 ;
+  solo2 ? gfx_a = 0.4;
+
+  gfx_x = field2xa - gfx_ext_retina*2;
+  gfx_y = field2hi + but_h*1.1;
+  gfx_rectto(field2x + field2w/2 +pad+1, field2lo+pad+1);
+  
+  gfx_x = max(gfx_ext_retina*1,field2xa) + but_h * 2.05;
+  gfx_y = field2hi + but_h*1.1;
+  gfx_rectto(field2xb + gfx_ext_retina*2, field2hi - gfx_ext_retina*2);
+ 
+  gfx_a = 0.6;
+  ):(
+  gfx_r = gfx_g = gfx_b = 0.0; gfx_a = 0.6;
+  gfx_x = max(gfx_ext_retina*1,field2xa); gfx_y = field2hi + gfx_ext_retina*1;
+  gfx_rectto(gfx_x + but_h*0.9 , gfx_y + but_h*0.95);  
+  );
+
+
+solo1 == 0 ? (
+  gfx_r = gfx_g = gfx_b = 0.0; gfx_a = 0.6;
+  gfx_x = max(gfx_ext_retina*1,field1xa)+but_h*1.15; gfx_y = field1hi + gfx_ext_retina*1;
+  gfx_rectto(gfx_x + but_h*0.83 , gfx_y + but_h*0.95);  
+  );
+solo2 == 0 ? (
+  gfx_r = gfx_g = gfx_b = 0.0; gfx_a = 0.6;
+  gfx_x = max(gfx_ext_retina*1,field2xa)+but_h*1.15; gfx_y = field2hi + gfx_ext_retina*1;
+  gfx_rectto(gfx_x + but_h*0.83 , gfx_y + but_h*0.95);  
+  );
+
+
+
+opto1 == 0 ? (
+//  gfx_x = field1x - field1w /2 + gfx_texth *1.03 - gfx_ext_retina * 0;
+  gfx_x = max(field1xa , gfx_ext_retina * 1 ) +gfx_ext_retina * 1;
+  gfx_y = field1lo - gfx_texth *3.8 + gfx_ext_retina * 1;
+  gfx_r = gfx_g = gfx_b = 0.0; gfx_a = 0.7 ;
+//  gfx_rectto(field1x - field1w/2 + gfx_ext_retina * 0 , field1lo - gfx_texth *2.6 );
+  gfx_rectto( gfx_x+but_h*0.8 , field1lo - gfx_texth *2.65 );
+  );
+
+opto2 == 0 ? (
+//  gfx_x = field2x - field2w /2 + gfx_texth *1.03 - gfx_ext_retina * 0;
+  gfx_x = max( field2xa , gfx_ext_retina * 1 ) + gfx_ext_retina * 1;
+  gfx_y = field2lo - gfx_texth *3.8 + gfx_ext_retina * 1;
+  gfx_r = gfx_g = gfx_b = 0.0; gfx_a = 0.7 ;
+  gfx_rectto( gfx_x+but_h*0.8, field2lo - gfx_texth *2.65 );
+  );
+
+
+
+// SHOW "A" & "R" WHEN ADJUSTING ATTACK & RELEASE
+
+gfx_r = gfx_g = gfx_b = 0.5; gfx_a = 1;
+
+cap_mode == 15 && mouse_cap  > 0 ? (
+  gfx_x = field1xa - gfx_texth*1.0; gfx_y = field1lo - but_h;
+  gfx_printf("A:");
+  );
+cap_mode == 16 && mouse_cap  > 0 ? (
+  gfx_x = field1xa - gfx_texth*1.0; gfx_y = field1lo - but_h*2.15;
+  gfx_printf("R:");
+  );
+
+cap_mode == 25 && mouse_cap  > 0 ? (
+  gfx_x = field2xa - gfx_texth*1.0; gfx_y = field2lo - but_h;
+  gfx_printf("A:");
+  );
+cap_mode == 26 && mouse_cap > 0 ? (
+  gfx_x = field2xa - gfx_texth*1.0; gfx_y = field2lo - but_h*2.15;
+  gfx_printf("R:");
+  );
+
+
+
+
+
+
+
+function draw_button(xp, yp, str) 
+  instance(w,h,x,y) 
+  globals(gfx_r,gfx_g,gfx_b,gfx_x,gfx_y) 
+(
+  gfx_measurestr(str, w, h);
+  xp -= w+3;
+  x=xp;
+  y=yp;
+//  gfx_set(0.04,0.18,0,0.8);                // Channel Button background color
+  gfx_set(0.02,0.02,0.15,1);                // Channel Button background color
+  w+=3;
+  h+=3;
+  gfx_rect(x,y,w,h);
+  gfx_set(.85,.85,.75, 0.7);                     // Channel Button rectangle color
+  gfx_line(x,y,x+w,y);
+  gfx_line(x+w,y,x+w,y+h);
+  gfx_line(x,y+h,x+w,y+h);
+  gfx_line(x,y,x,y+h);
+  h+=1;
+  w+=1;
+  gfx_x=xp+2; gfx_y=yp+2;
+  gfx_set(.9,.95,.9, 1);                     // Channel Button text color
+  gfx_drawstr(str);
+  gfx_x = xp;
+);
+
+
+
+// å
+
+timer2s += 1;
+timer2s > 60 ? (
+  king == -1 ? (
+    showplease = 1;
+    ):(
+    (gmem[3+channel] > 10) || (gmem[5+channel] > 10) || (gmem[7+channel] > 10) ?
+      showplease = 1 : showplease = 0;
+    );
+  );
+
+
+
+showplease == 0 ? (
+  pleasecount += 1;
+  showplease = 1;
+  ):(
+  pleasecount = 0;
+  );
+pleasecount > 0 ? pleasecount += 1;
+pleasecount > 60 ? (
+  showplease = 0;
+  showplease == 1 ? pleasecount = 0;
+  );
+
+
+gm_dontread >= 1 ? gm_dontread += 1;
+gm_dontread > 30 ? gm_dontread = 0;
+
+
+// Bottom bar before blit
+(noobtimer < 30) && (gm_dontread > 0) ? (
+  noobtimer += 1;
+  
+  gfx_x = 0 ; gfx_y = gfx_h2;
+  gfx_set(0,0.05,0.05,1);
+  gfx_rectto(gfx_w, gfx_h+2);
+  );
+
+
+showothers > 0 ? (
+ 
+  gm_readothers += 1;
+  
+  (gm_readothers > 30* 2) && (gm_dontread == 0) ? (
+    gm_readothers = 0;
+    
+    gfx_dest = 1;
+    gfx_mode = 1;
+    gfx_setimgdim(1,-1,-1);
+    gfx_setimgdim(1,gfx_w,gfx_h);
+    
+    gfx_x = 0 ; gfx_y = 0;
+    gfx_set(0,0.05,0.05,1);
+    gfx_rectto(gfx_w, gfx_h);
+    gfx_dest = -1;
+
+  
+  
+    gmrd = (1 + channel);
+    abort = 0 ;
+    gfx_dest = 1;
+  
+  
+    while (gmrd < (41 + channel)) (
+      (gmem[gmrd] > 0) && (myreg1 != gmrd) ? (
+        mygmem1 != gmrd && mygmem1 != gmrd-1 ? (
+  
+          gfx_y = gfx_h - gfx_texth*1.12;
+          gfx_r = 0.75; gfx_g = 0.6; gfx_b = 0.2; gfx_a = 1 ;
+            
+          gmem[gmrd] - floor( gmem[gmrd] /10)*10<1?(gfx_r=0.6;gfx_b=0.6;):
+          gmem[gmrd] - floor( gmem[gmrd] /10)*10<2?(gfx_r=0.2;):
+          gmem[gmrd] - floor( gmem[gmrd] /10)*10<3?(gfx_b=0;):
+          gmem[gmrd] - floor( gmem[gmrd] /10)*10<4?(gfx_r=0.2;gfx_b=0.5;gfx_b=1;):
+          gmem[gmrd] - floor( gmem[gmrd] /10)*10<5?(gfx_r=0.85;gfx_g=0.2;);
+          gfx_x = (log(1.0+( gmem[gmrd] /10/old_srate*2.0)*400)*wsc)  - wsc*0.2 - gfx_texth*1;
+  
+         
+          gmem[gmrd] >= 10000 ? gfx_printf("%.1f", gmem[gmrd] /10000):
+          gfx_printf("%d", gmem[gmrd] /10);
+          
+          gmval = gmem[gmrd];
+          gmloc[gmrd] = gmem[gmval];
+    
+    
+          gmem[gmrd] == 0 ? abort += 1;
+          abort > 3 ? (
+            gmrd = 50 + channel;
+            );
+    
+          );
+        gmloc[0] = gmrd;
+        gmrd += 1 ;
+      
+        
+        
+        );  //while
+      );
+    );
+  gfx_mode = 0;
+  gfx_dest = -1;
+  gfx_x = 0; gfx_y = 0;
+  
+  gfx_blit(1, 1, 0, srcx=0,srcy=gfx_h2,srcw=gfx_w,srch=gfx_h
+  , destx=0,desty=gfx_h2,destw=gfx_w,desth=gfx_h, 0,0);
+  );
+
+
+
+// Others' Button when bottom bar is visible
+slider52 > 0 ? (
+
+  gfx_x = gfx_texth * 0.12; gfx_y = gfx_h - gfx_texth*1.1;
+  gfx_set(1,1,1,0.4);
+  gfx_drawstr("Others'");
+  gfx_set(1,1,1,0.15);
+  gfx_x = gfx_texth * 2.85 ; gfx_y = gfx_h2;
+  gfx_lineto( gfx_texth * 2.85 , gfx_h);
+  gfx_x = 0 ; gfx_y = gfx_h-but_h*1.0;
+  gfx_lineto(gfx_w-but_h*1.1 , gfx_h-but_h*1.0);
+
+
+
+// Comm Channel Selector
+  slider52 == 2 ? (
+
+// Dim other frequencies
+    gfx_x = gfx_texth*2.95;
+    gfx_y = gfx_h2+2;
+    gfx_set(0.0,0.0,0.0,0.3);
+    gfx_rectto(gfx_w , gfx_h );
+    
+// Comms channel slider groove 
+    chanslixa = gfx_w/3 - but_h*2;
+    chanslixb = gfx_w /3*2 + but_h * 0.2;
+    chansliya = gfx_h - but_h*0.7;
+    chansliyb = gfx_h - but_h*0.3;
+    gfx_x = chanslixa;
+    gfx_y = chansliya;
+//    gfx_set(0.05,0.08,0.1,0.7);
+    gfx_set(0.0,0.08,0.15,0.8);
+    gfx_rectto(chanslixb , chansliyb );
+    gfx_set(0.3,0.3,0.3,1);
+    gfx_x = chanslixb-1;
+    gfx_y = chansliyb-1;
+    gfx_lineto(chanslixb-1,chansliya);    
+    gfx_lineto(chanslixa+1,chansliya);    
+    gfx_lineto(chanslixa+1,chansliyb-1);    
+    gfx_lineto(chanslixb-1,chansliyb-1);
+    
+    );
+  );
+
+
+
+
+
+slider52 > 0 ? (
+//    channel_button.draw_button(gfx_w/2 + but_h + (floor(slider51)-4.5) * gfx_w/24
+//     , gfx_h - but_h * 1.0, sprintf(#," Channel %.0f ",slider51));
+  help_button.draw_button(gfx_w-gfx_ext_retina*0, gfx_h - gfx_texth*1.3,
+    sprintf(#,"  ?  ",slider9));
+  help > 0 ? (
+    gfx_set(1,1,1,0.2,1);
+    gfx_rect(gfx_w-gfx_texth*1.5,gfx_h - gfx_texth*1.3 , gfx_w,gfx_h);
+    );
+  ):(
+  help_button.draw_button(gfx_w-gfx_ext_retina*0, gfx_h - gfx_texth*2.7 ,
+    sprintf(#,"  ?  ",slider9));
+  help > 0 ? (
+    gfx_set(1,1,1,0.2,1);
+    gfx_rect(gfx_w-gfx_texth*1.5,gfx_h - gfx_texth*2.7 , gfx_w,gfx_h-gfx_texth*1);
+    );
+  );
+gfx_mode = 0;
+
+
+
+
+
+
+showothers == 2 ? (
+
+  channel_button.draw_button(gfx_w/2 + but_h + (floor(slider51)-4.5) * gfx_w/24
+   , gfx_h - but_h * 1.1, sprintf(#," Channel %.0f ",slider51));
+
+
+  );
+
+// SOLO GRAPHICS
+gfx_r=gfx_g=gfx_b=0.01;gfx_a=0.7;
+
+solo1 ? (
+  gfx_x = field1xa - gfx_ext_retina*2; gfx_y = field1hi;
+  gfx_rectto(0,gfx_h);
+  gfx_x = field1xb +gfx_ext_retina*2; gfx_y = field1hi;
+  gfx_rectto(gfx_w,gfx_h);
+
+  gfx_x = f1labx - but_h* (1.5+(f1labx/gfx_w)*0.6); gfx_y = but_h*1.1;
+  gfx_rectto(0 , field1hi);
+  gfx_x = f1labx + but_h* (1.35+(f1labx/gfx_w)*0.5); gfx_y = but_h*1.1;
+  gfx_rectto(gfx_w-but_h*1.6 , field1hi);
+  );
+
+
+solo2 ? (
+  gfx_x = field2xa -gfx_ext_retina*2; gfx_y = field2hi;
+  gfx_rectto(0,gfx_h);
+  gfx_x = field2xb +gfx_ext_retina*2; gfx_y = field2hi;
+  gfx_rectto(gfx_w,gfx_h);
+
+  gfx_x = f2labx - but_h* (1.5+(f2labx/gfx_w)*0.6); gfx_y = but_h*1.1;
+  gfx_rectto(0 , field2hi);
+  gfx_x = f2labx + but_h* (1.35+(f2labx/gfx_w)*0.5); gfx_y = but_h*1.1;
+  gfx_rectto(gfx_w-but_h*1.6 , field2hi);
+  );
+
+
+
+
+
+// SHOW MOUSE CURSOR FREQUENCY
+
+
+showf == 4 ? (        // first click started
+  showftimer +=1;
+  
+  mouse_cap == 0 && cap_mode == 0 ? showf = 3; 
+//  mouse_cap > 0 && showftimer >= 30 ? showf = 2; // long click
+  );
+
+showf == 3 ? (
+  showftimer < 15 ? showftimer +=1 : showf = 0;
+  mouse_cap > 0 ? showf = 2;
+  );
+  
+showf == 2 || showf == 1 ? (
+//  wscmou=(gfx_w/log(1+400))+gfx_w* 0.01;
+  wscmou = wsc;
+
+  gfx_r=gfx_g=gfx_b=0.0;gfx_a=0.5;
+  gfx_x = mouse_x- gfx_texth*2.3;
+  gfx_y = mouse_y-gfx_texth*1.5;
+  gfx_rectto(mouse_x + gfx_texth*1.9 , mouse_y - gfx_texth * 0.3);
+
+
+  gfx_r=gfx_g=gfx_b=0.8;gfx_a=1;
+  //  gfx_x = gfx_w - gfx_texth*3;
+  //  gfx_y = gfx_h - gfx_texth*1.5;
+  gfx_x = mouse_x- gfx_texth*2;
+  gfx_y = mouse_y-gfx_texth*1.5;
+  gfx_setfont(3,"Trebuchet MS",13*gfx_ext_retina,'i');
+//  gfx_drawnumber(((exp(mouse_x/wscmou))-1)/800*srate,0);
+//  gfx_drawnumber(  txmou  ,0);
+  gfx_drawnumber(((exp((mouse_x-3+gfx_w/27.5)/wscmou))-1)/800*old_srate+1,0);
+  gfx_drawstr(" Hz");
+
+  mouse_cap == 0 ? showf = 1;
+  showf == 1 && mouse_cap == 1 ? showf = -1;
+  );
+
+showf == 0 && mouse_cap == 1 && cap_mode == 0 ? (showf = 4; showftimer = 0;);
+showf == -1 && mouse_cap == 0 ? showf = 0;
+
+mouse_x < 0 || mouse_x > gfx_w || mouse_y < 0 || mouse_y > gfx_h ? showf = 0;
+
+
+
+ 
+
+
+// Show GUIDE WHILE clicking
+
+help == -1 && mouse_cap == 0 ? help = 0;
+help == 0 && mouse_cap > 0 && cap_mode == 9 ? help = 3;
+
+help >= 2 ? (
+
+  gfx_x=gfx_y=0;
+  gfx_r=gfx_g=gfx_b=0.1;gfx_a=0.3;
+  gfx_rectto(gfx_w,gfx_h);
+  gfx_blurto(0,0);
+  gfx_blurto(gfx_w,gfx_h);
+
+  gfx_x = gfx_w-gfx_texth*0.5;
+  gfx_y = gfx_h-gfx_texth*0.5;
+  
+  gfx_r=gfx_g=gfx_b=0.1;gfx_a=1;
+  gfx_rectto(gfx_w/2.7 , gfx_texth*0.5);
+
+  gfx_x = x = gfx_w/2.7 + gfx_texth*1.3;
+  gfx_y = gfx_texth*1;
+  gfx_r=gfx_g=gfx_b=gfx_a=0.9;
+  gfx_setfont(2,"Skia",12*gfx_ext_retina,'');
+gfx_drawstr("                             DynEQ      ");
+gfx_drawstr(ver);
+gfx_x = x;
+gfx_drawstr("
+  
+Red and green modules are independent, and each have EQ
+(right side buttons) and Compressor / Transient Expander
+(left side) sections. Meters are for Gain Reduction / 
+Transient Expander and input.
+    
+Most buttons are sliders and can be dragged.
+- Double-click to reset    
+- Single-click to cycle through preset values
+
+Click anywhere to close this window, then click buttons
+button to learn what it does! (Upper left corner)
+
+Click [?] again to close help.");
+  
+  
+  
+  
+  
+  helptimer += 1;
+  mouse_cap > 0 && help == 2 && helptimer > 5 ? (helptimer = 0; help = 1; );  
+  mouse_cap == 0 && help == 3 ? (helptimer = 0; help = 2; );
+  );
+    
+help == 1 ? (
+
+
+
+  gfx_r=gfx_g=gfx_b=0.0;gfx_a=1;
+  gfx_x = guide_x2 + gfx_ext_retina * 7;
+  gfx_y = gfx_texth*1.2 + gfx_ext_retina * 0;
+  gfx_rectto(0 , 0);
+  
+  
+  mouse_cap == 0 && cap_mode == 9 ? (
+
+    gfx_setfont(2,"Trebuchet MS",13*gfx_ext_retina,'i');
+    gfx_r=gfx_g=gfx_b=gfx_a=0.9;
+    gfx_x = gfx_ext_retina *10 ;
+    gfx_y = gfx_ext_retina *1;
+
+    gfx_drawstr("Help is now on. Click anywhere!");
+
+    guide_x2 = gfx_x;
+    guide_y2 = gfx_texth*1.2;
+
+    );
+    
+  
+  gfx_setfont(1,"Trebuchet MS",12*gfx_ext_retina,'i');
+  gfx_r=gfx_g=gfx_b=gfx_a=1;
+  gfx_x = gfx_ext_retina *12 ;
+  gfx_y = gfx_ext_retina *1;
+
+
+
+
+cap_mode == 0 ? (
+
+
+  mouseothers == 1 ? (
+    gfx_drawstr("Frequencies from other plugin instancies");
+    ):(
+    mouseothersbut == 1 ? (
+      gfx_drawstr("Show/hide other plugin instances' frequencies)");
+      ):(
+      (mouse_x > gfx_w - but_h*1.1) && (mouse_y > gfx_h - but_h*1.1) ?
+      gfx_drawstr("Close help"):
+
+      gfx_drawstr("Double-click analyzer to show frequency");
+      );
+    );
+  guide_x2 = gfx_x;
+
+  ):(
+cap_mode == 15 || cap_mode == 25 ? (
+gfx_drawstr("Compressor Attack (ms), semi-automatic");
+      guide_x2 = gfx_x;
+  ):(
+cap_mode == 16 || cap_mode == 26 ? (
+gfx_drawstr("Compressor Release (ms), semi-automatic");
+      guide_x2 = gfx_x;
+      
+
+  ):(
+cap_mode == 14 || cap_mode == 24 ? (
+gfx_drawstr("Compression/Transient Expansion Ratio");
+      guide_x2 = gfx_x;
+      
+
+  ):(
+cap_mode == 18 || cap_mode == 28 ? (
+gfx_drawstr("Bypass module");
+      guide_x2 = gfx_x;
+      
+
+  ):(
+cap_mode == 11 || cap_mode == 21 ? (
+gfx_drawstr("Center Frequency (Hz)");
+      guide_x2 = gfx_x;
+      
+
+  ):(
+cap_mode == 12 || cap_mode == 22 ? (
+gfx_drawstr("EQ Width (Octaves)");
+      guide_x2 = gfx_x;
+      
+
+  ):(
+cap_mode == 19 || cap_mode == 29 ? (
+gfx_drawstr("EQ Steep notch mode");
+      guide_x2 = gfx_x;
+      
+
+  ):(
+cap_mode == 20 || cap_mode == 30 ? (
+gfx_drawstr("EQ Gain (before compressor)");
+      guide_x2 = gfx_x;
+      
+
+  ):(
+cap_mode == 17 || cap_mode == 27 ? (
+gfx_drawstr("Module output volume");
+      guide_x2 = gfx_x;
+      
+
+  ):(
+cap_mode == 13 || cap_mode == 23 ? (
+gfx_drawstr("Compressor Threshold (dB)");
+      guide_x2 = gfx_x;
+      
+
+  ):(
+cap_mode == 3 ? (
+gfx_drawstr("Analyzer precision (click to turn off/on)");
+      guide_x2 = gfx_x;
+        
+):(
+cap_mode == 6 ? (
+gfx_drawstr("Analyzer level (dB)");
+      guide_x2 = gfx_x;
+      
+):(
+cap_mode == 1 ? (
+gfx_drawstr("Analyzer floor (dB)");
+      guide_x2 = gfx_x;
+      
+
+):(
+cap_mode == 4 ? (
+gfx_drawstr("Analyzer time average");
+      guide_x2 = gfx_x;
+      
+):(
+cap_mode == 5 ? (
+gfx_drawstr("Analyzer frequency slope (dB/Octave)");
+      guide_x2 = gfx_x;
+      
+):(
+cap_mode == 8 ? (
+gfx_drawstr("Analyzer mode (Stereo, Mid, Side, Left, Right)");
+      guide_x2 = gfx_x;
+      
+):(
+cap_mode == 31 || cap_mode == 41 ? (
+gfx_drawstr("Channel mode (Stereo, Mid, Side, Left, Right)");
+      guide_x2 = gfx_x;
+):(
+cap_mode == 32 || cap_mode == 42 ? (
+gfx_drawstr("Compressor Release: Optical mode");
+      guide_x2 = gfx_x;
+):(
+cap_mode == 35 || cap_mode == 36 ? (
+gfx_drawstr("Solo module");
+      guide_x2 = gfx_x;
+):(
+cap_mode == 51 ? (
+gfx_drawstr("Comms channel for other plugins' frequencies");
+      guide_x2 = gfx_x;
+):(
+cap_mode == 52 ? (
+gfx_drawstr("Show/Hide other plugins' frequencies");
+      guide_x2 = gfx_x;
+      
+      
+      
+      
+      
+):(
+help == 1 && cap_mode == 9 && mouse_cap > 0 ? (
+      help = -1;
+
+
+//  ):(
+//  guide_x2 = 0;
+//  guide_y2 = 0;
+  );
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+);
+
+/*
+
+gfx_mode = 1;
+
+gfx_dest = -1;
+      gfx_x = gfx_y = 0 ;
+      gfx_r = gfx_g = gfx_b = 0;
+      gfx_rectto(gfx_w,gfx_h);
+      gfx_x = gfx_y = 0 ;
+      gfx_y = gfx_h-but_h; gfx_a = 1;
+//gfx_blit(3, 0.8, 1, srcx=0,srcy=gfx_h-but_h,srcw=gfx_w,srch=gfx_h, destx=0,desty=gfx_h-but_h*2,destw=gfx_w,desth=gfx_h, 0,0);
+gfx_blit(1,0.8,0.01);
+//gfx_mode = 0;
+*/
+
+
