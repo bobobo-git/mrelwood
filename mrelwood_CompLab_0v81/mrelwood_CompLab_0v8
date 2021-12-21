@@ -1,9 +1,13 @@
-desc:CompLab  0.8  [mrelwood]
+desc:CompLab  0.81  [mrelwood]
 
 /* TO BE DONE:
 - Autovolume for PreComp
+- Waveform scaling with window resize
 
 Version history:
+
+0.81
+- Separated Stereo L/R mode, previous renamed to Stereo L+R
 
 0.8
 - Much more precise metering
@@ -12,6 +16,8 @@ Version history:
 - Mono out ch selection
 - New 50ms Pre-Comp feature!
 - Fixed compressor hold, and increased to 100ms
+...
+- Fixed sidechain throughput
 
 0.71
 - Bug fixes and refinements
@@ -28,9 +34,10 @@ Version history:
 
 
 slider1:0<-60,0,0.1>-Threshold (dB)
-slider2:.43<0,1,0.01>-Attack
-slider3:.0975<0,1,.01>-Hold
-slider4:.316<0,1,0.01>-Release
+slider2:.35<0,1,0.01>-Attack
+//slider3:.0975<0,1,.01>-Hold
+slider3:0<0,1,.01>-Hold
+slider4:.407<0,1,0.01>-Release
 
 slider5:2<.1,10,.01>-Detector Width
 slider6:0<0,1,.01>-Detector HP (f scale)
@@ -42,7 +49,7 @@ slider9:1<0,1,0.01>-Mix
 slider10:0<-60,30,0.1>-Volume
 
 //slider11:2<0,2,1{Mono,Stereo L/R,Stereo M/S}>-Stereo mode
-slider11:2<0,2,.1>-Stereo mode
+slider11:3<0,3,.1>-Stereo mode
 slider12:.5<0,1,.01>-M/S side preboost
 slider13:.4<0,1,.01>-Release shape
 slider14:.75<0,1,.01>-Ratio
@@ -57,7 +64,7 @@ slider21:0<0,1,1{Input,Input + GR}>-L/R Meter Source
 slider22:1<0,1,1>-Allow unsafe release
 slider23:1<0,1,1{No,Yes}>-Auto Volume
 //slider24:0<0,3,1{Left,Right,Mid,Side}>Mono source
-slider24:0<0,3,.1>-Mono source
+slider24:2<0,3,.1>-Mono source
 slider25:1<0,1,1{Output,GR}>-Oscilloscope source #2
 slider26:1<0,1,1{Hz,samples}>-Short hold display
 slider27:0<0,3,1{Internal,Ch 3,Ch 4, Ch 3+4}>-Sidechain source
@@ -70,7 +77,7 @@ slider64:0<0,1,.01>-M/S Link
 
 @init
 
-ver = .8;
+ver = .81;
 
 pi = 3.14159265358979323;
 comp.compg == 0 ? comp.compg = 1;
@@ -111,7 +118,7 @@ slizemima(0,1,1, 7);
 slizemima(1,3,5, 8);
 slizemima(0,1,1, 9);
 slizemima(-60,0,30, 10);
-slizemima(0,2,2, 11);
+slizemima(0,3,3, 11);
 slizemima(0,.5,1, 12);
 slizemima(0,.4,1, 13);
 slizemima(0,.75,1, 14);
@@ -673,9 +680,16 @@ function pdcdo()
 @serialize
 
 store_01 = file_var(0, forcestereo);
+store_02 = file_var(0, verold);
 
 
 @slider
+
+verold < .81 ? (
+	stereo == 2 ? slider11 = stereo = 3;
+);
+verold = ver;
+
 upslider();
 
 sidechain = slider27;
@@ -768,17 +782,17 @@ sidechain == 0 ? (
 sidechain == 1 ? (
 	compinL = spl2;
 	compinR = spl2;
-	spl2 = 0;
+//     spl2 = 0;
 ) :
 sidechain == 2 ? (
 	compinL = spl3;
 	compinR = spl3;
-	spl3 = 0;
+//     spl3 = 0;
 ) :
 sidechain == 3 ? (
 	compinL = spl2;
 	compinR = spl3;
-	spl2 = spl3 = 0;
+//     spl2 = spl3 = 0;
 );
 //     compin = max(abs(spl0),abs(spl1));
 fhp > fhpmin ? (
@@ -903,7 +917,7 @@ stereo > 0 ? (
 
 		
 //          moninL = max(moninL,compin=(compinL+compinR)/2 );
-//          moninL = max(moninL,compin=((compinL+compinR)/2 + max(compinL,compinR))/2 );
+//          moninL = max(moninL,compin=1(compinL+compinR)/2 + max(compinL,compinR))/2 );
 		
 /*          
 		slider25 == 0 ? (
@@ -920,6 +934,19 @@ stereo > 0 ? (
 		spl1 *= (outg *volout)*mix+mixdry;
 	);
 	stereo == 2 ? (
+		compinL = abs(compinL);
+		compinR = abs(compinR) * msbal;
+		outgL = (comp.comp3(compinL,sl_thr,sl_att,sl_rel));
+		outgR = (compR.comp3(compinR,sl_thr,sl_att,sl_rel));
+		pdc_delay > 0 ? pdcdo();
+		monsplL = max(monsplL , abs(spl0) );
+		monsplR = max(monsplR , abs(spl1) );
+		
+		
+		spl0 *= (outgL *volout)*mix+mixdry;
+		spl1 *= (outgR *volout)*mix+mixdry;
+	);
+	stereo == 3 ? (
 /*
 	   compinL_ = abs(compinL+compinR)/2;
 //          compinR = (abs(compinL-compinR)/2 +compinL/2)/2 *msbal;
@@ -1056,8 +1083,7 @@ mtrsrc == 1 ? (
 );
 */
 
-spl2 = comp.ina;
-spl3 = -comp.flt;
+
 
 /*
 spl2 = outg- 2^(-3/6);
@@ -1366,10 +1392,13 @@ titini == 0 ? (
 	sth = ceil(gfx_texth * 1.35);
 	gfx_set(.7,1,1,1,0);
 	gfx_drawstr("Stereo M/S ");
-	gfx_set(1,1,1,.85,0);
 	gfx_x = 1; gfx_y = ceil(sth+2);
+	gfx_set(1,.8,1,1,0);
 	gfx_drawstr("Stereo L/R ");
-	gfx_x = 1; gfx_y = ceil(sth*4+8);
+	gfx_x = 1; gfx_y = ceil(sth*2+2);
+	gfx_set(1,1,1,.85,0);
+	gfx_drawstr("Stereo L+R ");
+	gfx_x = 1; gfx_y = ceil(sth*5+8);
 	
 	gr = .8;
 	(gfx_set(gr,1,gr,1); gfx_drawstr("Mono (L) .." ); );
@@ -1511,8 +1540,9 @@ stshow == 0 ? (
 		mono == 2 ? (gfx_set(1,gr,gr-.1,1); gfx_drawstr("<< Mono (Mid) >>" ); ):
 		mono == 3 ? (gfx_set(1,1,gr-.1,1); gfx_drawstr(" << Mono (Side)" ); );
 	) :
-	stereo < 1.5 ? (gfx_set(1,1,1,1); gfx_drawstr("Stereo L/R "); ) :
-	stereo < 2.5 ? (
+	stereo < 1.5 ? (gfx_set(1,1,1,1); gfx_drawstr("Stereo L+R "); ) :
+	stereo < 2.5 ? (gfx_set(1,gr=.8,gr,1); gfx_drawstr("Stereo L/R "); ) :
+	stereo < 3.5 ? (
 		gfx_r = m11gr - .2;
 		gfx_g = min(1, m11gr + .15);
 		gfx_b = m11gr - .2;
@@ -1537,7 +1567,7 @@ stshow == 1 ? (
 	mx11a = sax;
 	my11a = say;
 	gfx_blit(10,1,0
-	 , saxd-(mtrw-61),ceil(max(0,2-slider11)*sth-2-dragst),saw,sah
+	 , saxd-(mtrw-61),ceil(max(0,3-slider11)*sth-2-dragst),saw,sah
 	 , saxd,say,saw,sah);
 
 	gfx_blit(10,1,0
@@ -1548,7 +1578,7 @@ stshow == 1 ? (
 	 ,saw,sahm=(say+sah)-(saym=floor(say+slider11*sth)-1)
 	 , saxd,saym+dragst,saw,sahm);
 */
-	 , saxd-(mtrw-52)+slider24*98,saym=3+sth*4-dragst
+	 , saxd-(mtrw-52)+slider24*98,saym=3+sth*5-dragst
 	 ,saw,sahm=(say+sah)-(saym2=floor(say+slider11*sth)-1)
 	 , saxd,saym2,saw,sahm);
 	slixran[24] = 80;
@@ -1571,17 +1601,17 @@ stshow == 1 ? (
 	
 	
 	gfx_x = mx12a = mx11a -30;
-	mouhvr == 12 && stereo == 2 ? (
+	mouhvr == 12 && stereo >= 2 ? (
 		m12gr < .9 ? m12gr += .025;
 		detini = 0;
 	):(
-		m12gr != (a2= txtdim-.3*(stereo!=2)) ? (
+		m12gr != (a2= txtdim-.3*(stereo<2)) ? (
 			m12gr += sign(a2-m12gr) * .025;
 			detini = 0;
 		);
 	);
 	gfx_set(m12gr,m12gr,m12gr,1);
-	gfx_drawstr("S pre-gain: ");
+	stereo == 2 ? gfx_drawstr("R pre-gain: ") : gfx_drawstr("S pre-gain: ");
 	
 	gfx_drawnumber( sidedb,1 );
 	//gfx_drawstr( sidedb,1 );
@@ -1662,11 +1692,11 @@ gfx_set(gr,gr,gr,1);
 gfx_x = mtrx-pad*2-gfx_texth;
 //gfx_y = mtry-3;
 gfx_y = mtry+(mtryb-mtry)*.5 - gfx_texth *.6 -1;
-stereo == 2 ? (
+stereo == 3 ? (
 	gfx_set(.45,.8,.45,1);
 	gfx_drawstr("M");
 ) :
-stereo == 1 ? gfx_drawstr("L"):
+stereo == 1 || stereo == 2 ? gfx_drawstr("L"):
 stereo < .5 ? (
 	gfx_y += mtrh * .2 + gfx_texth/3;
 	gr = .7;
@@ -1679,11 +1709,11 @@ gfx_x = mtrx-pad*2-gfx_texth;
 //gfx_y = mtryb+pad/2-0;
 gfx_y = mtryb+(mtryb-mtry)*.5 - gfx_texth *.4;
 //gfx_y += mtrh*.55 +1;
-stereo == 2 ? (
+stereo == 3 ? (
 	gfx_set(.5,.85,.5,1);
 	gfx_drawstr("S");
 ) :
-stereo == 1 ? gfx_drawstr("R");
+stereo == 1 || stereo == 2 ? gfx_drawstr("R");
 
 
 
@@ -1794,13 +1824,14 @@ stereo <= 1 ? (
 		osin2 = min(outg,outgR);
 */     
 
+	// INPUT LEVEL METERS
 	xposin = max(mtrx,max(mtrx+ moninL^grexp *mtrw , xposin - decayx));
 	xposinR = max(mtrx,max(mtrx+ (moninR/msbal)^grexp *mtrw , xposinR - decayx));
 //     xposinL = mtrx+ moninL^grexp *mtrw;
 //     xposinR = mtrx+ moninR^grexp *mtrw;
-	gfx_set(.0,.35,.4,.7);
+	stereo == 2 ? gfx_set(.0,.3,.4,.8) : gfx_set(.2,.4,.1,.7);
 	gfx_rect(mtrx,mtrya,xposin-mtrx,mtrhs);
-	gfx_set(.1,.35,.0,.7);
+	stereo == 2 ? gfx_set(.1,.35,.0,.7) : gfx_set(.2,.4,.35,.7);
 	gfx_rect(mtrx,mtryb,xposinR-mtrx,mtrhs);
 	
 
@@ -1837,12 +1868,19 @@ stereo <= 1 ? (
 
 //     gfx_set(.1,.8,.6,.4);
 
+	// GAIN REDUCTION METERS
 	gfx_set(.9,.0,.0,.5,1);
 	gfx_rect(xposgr,mtrya,mtrx2-xposgr,mtrhs);
-	gfx_set(.8,.0,.2,.5,1);
+	stereo >= 2 ? gfx_set(.7,.2,.0,.5,1) : gfx_set(1,.0,.0,.4,1);
 	gfx_rect(xposgr2,mtryb,mtrx2-xposgr2,mtrhs);
+	
+	stereo == 2 && xposgr2 < xposinR ? (
+		gfx_set(.5,0,1,.2);
+		gfx_rect(xposgr2,mtryb,xposinR-xposgr2,mtrhs);
+	);
 
-	// Limiter
+
+	// LIMITER METERS
 //     gfx_set(.6,.0,.3,.5,1);
 //     gfx_set(.4,.0,.2,.6,1);
 	gfx_set(.7,.0,0,1,1);

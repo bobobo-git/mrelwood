@@ -1,0 +1,2079 @@
+desc: DynaStrip  [mrelwood]
+
+
+CHANGE LOG:
+
+0.41
+- Fixed: Transient block metering
+- Fixed: Transient block EQ
+- Fixed: Saturation Bass EQ
+- Fixed: Block order volume
+- Transient auto-volume improvements
+- Increased Comp HP freq range to 400Hz
+
+0.40
+- Huge improvements on Transient engine, fe. removing distortion.
+- Added: Auto-volume knob for Transient block
+
+0.35:
+- Fixed: Module jumping when loading preset
+- Intro animation will now only play in a new instance of the plugin, once per project load.
+
+0.34:
+- Fixed: Version number drawing issues on some OS.
+- Added bypass for master limiter.
+- Changed the title font (old looked crappy on Windows).
+
+0.32:
+- JP-proof module dragging
+- Fixed Last touched parameter
+
+0.31:
+- Fixed: Compying instance messed metering and plugin size
+
+0.3:
+- Refined Saturation sound
+- Added "Hard" saturation mode
+- Added hi-pass filter for compressor
+- Refined slider travels and ranges
+- Refined auto-volume levels
+
+0.22:
+- Fixed resizing freakout
+- Skipped intro graphics when not new instance
+- Small GFX refinements
+
+0.21:
+- Fixed a small drawing glitch
+- Colour coded EQ knobs
+- Module dragging visuals
+- Other small GFX refinements
+
+0.2:
+- Added EQ module
+- Added "Mix" pot for Compressor
+- Added Enable switches to Mix module
+- Fixed module position loading
+- Fixed/Refined Saturation/Compressor auto volume
+- Increased max Saturation gain
+- Nicer knob design
+- Limited module height based on width
+- Smaller GFX improvements
+
+
+
+
+
+//slider1:0<-48,0,.1>-Threshold (dB)
+slider1:0<0,0,0>-
+slider2:0<0,0,0>-
+slider3:1<0,1,.01>-Comp Mix
+//slider4:.5<0,1,.01>-Release
+
+slider4:0<0,0,0>-
+slider5:0<0,1,.01>-Saturation
+slider6:0<0,1,.01>-Compress
+//slider7:20<1,100,.1>Comp Release (ms)
+slider7:.5<0,1,.01>-Comp Release
+slider8:0<0,1,.01>-Transient
+slider9:1<0,2,.01>-Trans Duration
+slider10:0<-1,1,.01>-Trans Treble
+//slider11:0<0,1,.01>-Transient High Pass
+slider11:0<0,1,.01>-Comp Hi-Pass
+
+((slider12:100<20,500,10>Freq
+((slider13:0<-24,12,.1>Gain
+slider12:0<-1,1,.01>-Trans Bass
+((slider14:1<1,4,.1>Width
+
+slider13:.5<0,1,.01>-Comp Ratio
+
+//slider11:0<0,1,.01>-MaxiBoo
+//slider12:0<-48,0,.1>Maxim Threshold (dB)
+slider14:0<-1,1,.01>-Satur Bass
+
+slider15:1<1,4,1>--Satur position
+slider16:2<1,4,1>--Comp position
+slider17:3<1,4,1>--Trans position
+slider18:4<1,4,1>--EQ position
+
+
+//slider18:0<-24,0,.01>-GR Meter
+slider19:1<0,1,.01>-Mix
+slider20:0<-24,12,.01>-Vol (dB)
+slider21:1<0,1,.01>-Trans AutoVol
+
+slider22:.6<0,1,.01>-Satur mix
+slider23:0<0,1,1>-Satur hard
+
+slider24:0<-1,1,.01>-Satur Treble
+slider25:0<0,0,0>-
+slider26:0<0,0,0>-
+slider27:0<0,0,0>-
+slider28:0<0,0,0>-
+slider29:0<0,0,0>-
+
+slider30:0<-1,1,.01>-EQ Treble Gain
+slider31:.70715<0,1,.01>-EQ Treble Frequency
+slider32:0<-1,1,.01>-EQ Middle Gain
+slider33:.266<0,1,.01>-EQ Middle Frequency
+slider34:0<-1,1,.01>-EQ Bass Gain
+slider35:.3652<0,1,.01>-EQ Bass Frequency
+slider36:0<0,0,0>-
+
+slider37:2<0.1,4,.1>-EQ Middle Width
+slider38:0<0,0,0>-
+slider39:0<0,0,0>-
+
+
+slider40:1<0,1,1>-Sat Enable
+slider41:1<0,1,1>-Comp Enable
+slider42:1<0,1,1>-Trans Enable
+slider43:1<0,1,1>-EQ Enable
+slider44:1<0,1,1>-Limiter Enable
+
+options:gmem=DynaStrip_mrelwood
+
+@init
+
+
+ver = 0.41;
+
+pi = 3.1415926368979;
+start = 1;
+dragged == 0 ? startg = 1;
+aspect = 900/550;
+//sz1 == 0 ? (sz1 = 14; sz2 = 12; );
+ 
+/*
+maxim.order = slider15;
+comp.order = slider16;
+trans.order = slider17;
+eq.order = slider18;
+*/
+
+spacer.order = 5;
+mix.order = 5.1;
+vol.order = 6.1;
+willupslib = willupslig = 1;
+
+maxim.L.g = maxim.R.g = comp.L.g = comp.R.g =
+vol.L.g = vol.R.g = comp.gLfmin = comp.gRfmin = 1;
+//trans.L.fast.gr = trans.R.fast.gr = trans.L.slo.gr = trans.R.slo.gr = 1;
+szok = 0;
+sz2 = 12;
+sz1 = sz1_ = 14;
+peakdur = 60 *.3;
+
+ext_noinit = 1;
+
+txta = .95;
+ 
+
+
+function eqini(hp_ls_n_hs f ga w)
+  instance(Q alpha omega sinf cosf w1 gexp beta gmul b0 b1 b2 a0 a1 a2 g)(
+  g = ga;
+
+  omega = 2*pi*f/srate;   // Cookbook "w0"
+  
+  sinf   = sin(omega);
+  cosf   = cos(omega);
+
+  w = max(w , max(.01, .2 + .05*(abs(ga)-20) ));
+
+  w1 = 1/ ((w-1)/2+1);
+
+  gexp = 10^(ga/40);
+  beta  = sqrt(gexp)*sqrt( (gexp + 1/gexp)*(1/w1 - 1) + 2 );    // (if shelf slope is specified)
+//    beta  = sqrt(gexp)/qval;                                     //(for shelving EQ filters only)       
+
+  gmul = sqrt( 10^(ga/20) );
+
+  
+
+  Q = .7;
+  
+  alpha = sinf/(2*Q);                                   //  (if Q is specified)
+  
+  hp_ls_n_hs == 0 ? ( // HP 
+    b0 =  (1 + cosf)/2;
+    b1 = -(1 + cosf);
+    b2 =  (1 + cosf)/2;
+    a0 =   1 + alpha;
+    a1 =  -2*cosf;
+    a2 =   1 - alpha;
+  ) :
+  
+  hp_ls_n_hs == 1 ? (  // LSF
+    b0 =    gmul*( (gmul+1) - (gmul-1)*cosf + beta*sinf );
+    b1 =  2*gmul*( (gmul-1) - (gmul+1)*cosf            );
+    b2 =    gmul*( (gmul+1) - (gmul-1)*cosf - beta*sinf );
+    a0 =        (gmul+1) + (gmul-1)*cosf + beta*sinf;
+    a1 =   -2*( (gmul-1) + (gmul+1)*cosf            );
+    a2 =        (gmul+1) + (gmul-1)*cosf - beta*sinf;
+  ) :
+
+  hp_ls_n_hs == 3 ? (  // HSF
+    b0 =    gmul*( (gmul+1) + (gmul-1)*cosf + beta*sinf );
+    b1 = -2*gmul*( (gmul-1) + (gmul+1)*cosf            );
+    b2 =    gmul*( (gmul+1) + (gmul-1)*cosf - beta*sinf );
+    a0 =        (gmul+1) - (gmul-1)*cosf + beta*sinf;
+    a1 =    2*( (gmul-1) - (gmul+1)*cosf            );
+    a2 =        (gmul+1) - (gmul-1)*cosf - beta*sinf;
+  ) : (
+  
+    Q = 1.5/(w+.1);
+    alpha = sinf/(2* Q );
+
+    ga *= min(1, 40/(abs(ga) ) );
+    gmul = sqrt( 10^(ga/20) );
+    
+  
+    b0 =   1 + alpha*gmul;
+    b1 =  -2*cosf;
+    b2 =   1 - alpha*gmul;
+    a0 =   1 + alpha/gmul;
+    a1 =  -2*cosf;
+    a2 =   1 - alpha/gmul;
+  );
+);
+
+
+function eqpole(in)
+  instance(in1 in2 out out1 out2 b0 b1 b2 a0 a1 a2 eqout)(
+  
+  out = (this..b0/this..a0)*in + (this..b1/this..a0)*in1 + (this..b2/this..a0)*in2
+   - (this..a1/this..a0)*out1 - (this..a2/this..a0)*out2;
+  in2 = in1;
+  in1 = in;
+  out2 = out1;
+  out1 = out;
+
+  eqout = out;
+);
+
+function maximize0(in)
+  instance(ins ina inb thr ovr ovr1 g g0)(
+
+  g = g0 +1;
+
+  ina = abs(inb = in * maxiboo );
+  thr = 1-.8*maxim1;
+  ovr = max(0,ina-thr);
+  ovr1 = ovr/(1-thr);
+  
+  ina > thr ? (
+    in *= (g = ( thr + (ovr/(1+ovr1)) ) /ina );
+  ):(
+    g = 1;
+  );
+  
+  g0 = g -1;
+  
+  ins = sin( min(1,max(-1,inb *g)) * 1.57);// * (1 / (1+5 * maxim1));
+//  ins = inb *g;
+  
+  maxim1 * ins * maxivol  + (1-maxim1) * in;
+  
+);
+
+function maximize_mess(in)
+  instance(ins ina inab inb thr ovr ovr1 g g_ g0 mode outg)(
+
+  g_ = g0 +1;
+
+  ina = abs(in);
+  inab = abs(inb = in * maxiboo  );
+  ovr = max(0,inab-maxithr);
+  ovr1 = ovr/(1-maxithr);
+  
+  inab > maxithr ? (
+    g_ = ( thr + (ovr/(1+ovr1)) ) /inab ;
+//    g_ = ( maxithr + sin(min(1.57,ovr1))*(1-maxithr) ) /inab ;
+    
+  ):(
+    g_ = 1;
+  );
+  
+  g0 = g_ -1;
+  
+//  ins = sin( min(1.57,max(-1.57,inb *g)) ) * 1.57;// * (1 / (1+5 * maxim1));
+//  inb < 0 ? ins = sin( min(1.57,max(-1.57,inb *g)) ) * 1.7 :
+//  ins = inb *g *1.57;
+
+//  maxim1 * ins * maxivol  + (1-maxim1) * in;
+  g = (maxim1 * (inab *g_ *1.57) * maxivol  + (1-maxim1) * ina) / ina;
+  
+);
+
+
+function maximize_v(in) // Vari-profile
+  instance(ins ina inab inb thr ovr ovr1 g g_ g0 mode outg)(
+
+  g_ = g0 +1;
+
+  ina = abs(in);
+  inab = abs(inb = in * maxiboo  );
+  ovr = max(0,inab-maxithr);
+  ovr1 = ovr/(1-maxithr); // Vari-profile
+//  ovr1 = ovr/(maxithr*3);
+  
+  inab > maxithr ? (
+    g_ = ( maxithr + (ovr/(1+ovr1)) ) /inab ;
+  ):(
+//    g_ = 1;
+    g_ += min(1-g_ , 100/srate);
+  );
+  
+  g0 = g_ -1;
+  g = (maxim1 * (inab *g_ *1.57) * maxivol  + (1-maxim1) * ina) / ina;
+  
+);
+
+function maximize(in) // Release
+  instance(ins ina inab inb thr ovr ovr1 g g_ gtgt gout c tmp)(
+
+  g_ = g0 +1;
+
+  ina = abs(in);
+  inab = abs(inb = in * maxiboo*2  );
+  ovr = max(0,inab-maxithr);
+  ovr1 = ovr/(1-maxithr); // Vari-profile
+//  ovr1 = ovr/(maxithr*3);
+
+  gtgt = min(1, ( maxithr + (ovr/(1+ovr1)) ) /inab );
+  
+  gtgt < g_ ? (
+    g_ = gtgt;
+    c = 0;
+  ):(
+    hard ? g_ += (gtgt-g_) * (tmp=.5-.5* cos(c/( (.0004) * srate)*1.57)) :
+    g_ += (gtgt-g_) * (tmp=.5-.5* cos(c/( (.007) * srate)*1.57))*tmp ;
+
+    c += 1;
+  );
+  
+  g0 = g_ -1;
+//  g = 1- (1-g_)/(1+maxiboo*.002);
+  g = g_;
+  gout = (maxim1 * (inab *g_ *1.57) * maxivol *(1.4-.4*hard)  + (1-maxim1) * ina) / ina;
+  
+);
+
+
+
+
+
+
+function compo(in)
+  instance(ina inag g g0 ovr )(
+
+  ina = abs( in );
+  
+  g = g0 +1;
+
+  (inag = ina * g) > thro ? (
+    g *= (thro/inag -1) *.5 +1;
+  ):(
+    g *= (1- inag/thro) * (1-g*g) *rels +1;
+  );
+
+  
+  g > 1 ? g = 1;
+  g < .01 ? g = .01;
+  
+  g0 = g-1;
+  
+  in * g * compvol ;
+  
+);
+
+
+function compo2(in)
+  instance(ina inag g g0 ovr tgtg)(
+
+  ina = abs( in );
+  g = g0 +1;
+  tgtg = (thr2 + cran* sin(min(1.57, max(0,(ina-thr2)/cran) ))  ) /ina;
+  
+  g > tgtg ? (
+    g -= (g-tgtg) *.5;
+  ):(
+    g *= (1- (ina*g)/thr) * (tgtg-g*g) *rels +1;
+  );
+
+  (inag = ina * g) > thr2 ? (
+//    g = min(g, (thr2 + (ovr = ina-thr2)/(1+ (ovr/(thr-thr2)) ))/ina ) ;
+//    g = min(g,  ( thr2+sin(min((inag-thr2)/cran,1.57))*cran )/(inag)     );
+    p=0;
+  );  
+
+  (inag = ina * g) > thr ? (
+//    g *= (thr/inag -1) *.5 +1;
+    p=0;
+  ):(
+//    g *= (1- inag/thr) * (1-g*g) *rels +1;
+    p=0;
+  );
+
+  
+  g > 1 ? g = 1;
+  g < .01 ? g = .01;
+  
+  g0 = g-1;
+  
+
+  in * g * compvol ;
+  
+);
+
+function comp_bug(in)
+  instance(ina inag g_ g g0 ovr rc tgtg out)(
+
+  ina = abs( in );
+  g_ = g0 +1;
+  tgtg = (thr2 + cran* sin(min(1.57, max(0,(ina-thr2)/cran) ))  ) /ina;
+  
+  g_ > tgtg ? (
+    g_ -= (g-tgtg) *.5;
+    rc = 0;
+  ):(
+    rc = min(relspls , rc += 1);
+//    g *= (1- (ina*g)/thr) * (tgtg-g*g) *rels*1.3* (.5-cos((tmp=rc/relspls)*3.14)*.5 ) +1;
+//    g *= (1- (ina*g)/thr) * (tgtg-g*g) *rels +1;
+    g_ *= (1- (ina*g_)/thr) * (tgtg-g*g) *rels*2*(tmp=rc/relspls)*tmp +1;
+  );
+
+
+  
+  g_ > 1 ? g_ = 1;
+  g_ < .01 ? g_ = .01;
+  
+  g0 = g_ -1;
+  
+  
+  
+  ratio == 8 ? g = g_ :
+    g = g_ + (1-g_)/ratio;
+  
+//  out = in * g * compvol :
+//   out = in * ( (g * compvol -1) * ratm +1 );
+   
+  in * g * compvol;
+  
+);
+
+
+function comp(in)
+  instance(ina inag g_ g g0 ovr ovrdb rc tgtg tgtgdb out)(
+
+  ina = abs( in );
+  g_ = g0 +1;
+  ovr = max(0,(ina-thr2)/cran);
+//  ovrdb = max(0, 19.93*log10(ina) - thr2db );
+//  ovr = 2^(( (ovrdb-ovrdb/ratio)/crandb )/6);
+//  ovr = (ovrdb-ovrdb/ratio)/crandb;
+  tgtg = min(1, (thr2 + (cran)* sin(min(1.57, ovr ))  ) /ina );
+  tgtgdb = 19.93*log10(tgtg);
+  tgtgdb += -tgtgdb/ratio;
+  tgtg = 2^(tgtgdb/6);
+  
+  g_ > tgtg ? (
+    g_ -= (g-tgtg) *.5;
+    rc = 0;
+  ):(
+    rc = min(relspls , rc += 1);
+//    g *= (1- (ina*g)/thr) * (tgtg-g*g) *rels*1.3* (.5-cos((tmp=rc/relspls)*3.14)*.5 ) +1;
+//    g *= (1- (ina*g)/thr) * (tgtg-g*g) *rels +1;
+//    g_ *= (1- (ina*g_)/thr) * (tgtg-g*g) *rels*2*(tmp=rc/relspls)*tmp +1;
+    g_ += ((min(1,tgtg)-g_)+(1-g_))^2 *rels*(tmp=rc/relspls) ;
+  );
+
+  
+  g_ > 1 ? g_ = 1;
+  g_ < .01 ? g_ = .01;
+  
+  g0 = g_ -1;
+  
+  
+  
+  ratio1 == 1 ? g = g_ :
+//    g = g_ + (1-g_)/ratio;
+//    g = g_ * ((1/g_-1)/ratio+1);
+    g = g_;
+
+  
+//  out = in * g * compvol :
+//   out = in * ( (g * compvol -1) * ratm +1 );
+   
+  in * g * compvol *compmix;
+  
+);
+
+
+function transient_035(raw)
+  instance(rawa fltf flt flts tg g g_ tranc out fltfc fltfmul tgtmp)(
+  rawa = abs(raw) * traninmul;
+//fltf = 0;
+//  fltf += ((rawa-fltf)*.5 + (rawa-fltf)*(rawa-fltf) ) * .1;
+//  fltf += ((rawa-fltf)*(.03/(1+2*tranlen2*tranlen2)+.97*(rawa>fltf)) +max(0,rawa-fltf)*(rawa-fltf) ) * .1;
+  rawa > fltf ? (
+//    fltf += ((rawa-fltf)*(.03/(1+2*tranlen2*tranlen2)+.97) +(rawa-fltf)*(rawa-fltf) )* .1;
+    fltf = rawa;
+    fltfc = 0;
+  ):(
+    fltfc += 1;
+    fltfmul = max(0, fltfc/ (srate/40) );
+    fltf += ((rawa-fltf)*(.03/(1+2*tranlen2*tranlen2)) ) * fltfmul * .1;
+  );
+    
+    
+//  fltf > rawa ? fltf = rawa;
+//  flt = (flts += (rawa-flts) * .0002 + .0003 * max(0,rawa-flts) );
+//  flt = (flts += (tranmul)*((rawa-flts) * .0002 + .0003 * max(0,rawa-flts) ));
+//  flt += (transpls)*(tmp=rawa-flt)/(1*tmp+1) * .007;
+  fltf > flt ? (
+    tranc += (tranc < transpls) *.05;
+    flt += (tranc/transpls)*(tranc/transpls) *(fltf-flt) * 1;
+  ):(
+    tranc = 0;
+//    flt += (transplsi)*(rawa-flt) * .1;
+    flt += (rawa-flt) * tranrelmul;
+  );
+  flts = flt + flt * (1-flts);
+//  tg = (max(0,fltf-flt-.003) ) *50;
+  tg = (tgtmp = max(0,fltf-flt-.005) )*tgtmp *50;
+  tg /= (1+tg);
+  
+//  g = 19.93*log10(tg)*trans/12;
+//  g = 1/(tg*trans1+1);
+  
+//  out = raw * (g_= (2+tranboo) * (1+.5*transtre1*(1-transbas1)) * tg * trans1 );
+//  out = raw * (g_= (2+tranboo) * (.5+.5*((1-transtre1)+(1-transbas1))) * tg * trans1 );
+  out = raw * (g_= (2+tranboo) * tg * trans1 );
+  g = 1/(g_/ (1+.5*(comp1+maxim1)) +1);
+  
+  out;
+);
+
+function transient(raw)
+  instance(rawa pk pkc pkmul  pkf pkfmul pkfo pkfdir  fltf flt fltc flts tg tg2 g g_ tranc out outg fltfc fltfmul tgtmp)(
+
+  this.raw = raw;
+  rawa = abs(raw) * traninmul;
+  rawa > pk ? (
+    pk = rawa;
+    pkc = 0;
+  ):(
+    pkc += 1 * (pkmul*0+1);
+    rawa > pk * .9 ? pkc = srate/1000;
+//    pkmul = max(0, pkc/ (srate/140) -1 ) +.001;
+    pkmul = max(0, pkc/ (srate/1000 * (1+3*tranlen1)) -1 ) +.01;
+    pk -= (pk-rawa +1) * pkmul * .001;
+  );
+/*
+  pk > fltf ? (
+    fltf += (pk-fltf) *.1;
+  ):(
+    fltf -= (fltf-pk) *.01;
+  );
+*/
+//  drag == 9 ? pkf = pkfmul = 0;
+  
+//  pkfmul += (pkftmp = abs(pk-pkf)) / (1+ pkftmp) * sign(pk-pkf);
+//  pkfmul += atan((pk-pkf)^2 *sign(pk-pkf) );
+  pkfmul += atan( max(0,pk-pkf)^2 * (50) ) /1 ;
+//  pkfmul += atan((pk-pkf)* (.1+3*(pk>pkf)) ) /4;
+  pkf > pk ? (
+//    pkfmul /= ( pkf/pk-.9) *1 +1 ; // Dampen when flt > pk
+//    pkfmul -= max(0, pkf-pk) *.1  ; // Dampen when flt > pk
+    pkfdir > 0 ? (
+      pkfmul /= max(0, pkf/pk-1) *4 +1 ; // Dampen when flt > pk
+    ):(
+//      pkfmul /= (pk/pkf)^2 *.1 +1; // Dampen when flt nearing down to pk 
+      pkfmul /= (pk/pkf) *.1 +1; // Dampen when flt nearing down to pk 
+    );
+  );
+//  pkfmul > 1 ? pkfmul = 1;
+//  pkfmul < -1 ? pkfmul = -1;
+//  pkf += pkfmul *(.01 + .1*(pk>pkf));
+
+/*
+  pk > pkf ? (
+    pkfo = pkf;
+    pkf += (pk-pkf) *.1;
+    pkfdir = pkf-pkfo;
+  ):(
+    pkf += pkfdir - (pkf-pk) *.1;
+  );
+*/
+//  pkf += pkfmul / (1+ (1-pkf)^4);
+  pkfo = pkf;
+  
+  pk > pkf ? (
+    pkf += pkfmul *(.01) + (pk-pkf)  ;
+  ):(
+//    pkf += pkfmul *(.01) / (pkf/pk);
+    pkf += pkfmul *(.01) * (pk/pkf)^2;
+//    pkf /= ( pkf/pk -1) *.0001 / (1+10*tranlen1) +1; // pkf fall speed when pkf > pk
+//    pkf /= ( 1-pk/pkf )^1 *.01 / (1+10*tranlen1) +1; // pkf fall speed when pkf > pk
+    pkf /= ( 1-pk/pkf ) *pkf*.001 +1; // pkf fall speed when pkf > pk
+  );
+  
+  pkfdir = pkf-pkfo;
+  
+  fltf = pkf;
+  
+  fltf > flt ? (
+    tranc += (tranc < transpls) *.05;
+    flt += (tranc/transpls)*(tranc/transpls) *(fltf-flt) ;
+    fltc = 0;
+  ):(
+    tranc = 0;
+    fltc += ((flt+.1)/(fltf+.1));
+//    flt += (rawa-flt) * tranrelmul;
+    flt += (fltf-flt) * fltc *.000001;
+  );
+
+  flts = flt + flt * (1-flts);
+//  tg = (max(0,fltf-flt-.003) ) *50;
+  tg = (tgtmp = max(0,fltf-flt-.0*tranlen1) ) *50;
+//  tg2 = (.5-.5* cos( max(0,min(3.14, (fltf-flt) *20)) )) *10 ;
+//  tg2 = (tgtmp = max(0,fltf-flt-.00*3) )*tgtmp *50;
+//  tg2 = (tgtmp = max(0,fltf-flt-.001) *2 )*tgtmp ;
+//  tg2 = (tgtmp = max(0,(fltf+.1)/(flt+.1)-1) *1 )*tgtmp ;
+  tg2 = max(0, fltf/flt -1) *5;
+  tg2 = atan(tg2 ) ;
+  tg /= (1+tg);
+  
+//  tg2 *= min(1,rawa*50);
+  
+//  g = 19.93*log10(tg)*trans/12;
+//  g = 1/(tg*trans1+1);
+  
+//  out = raw * (g_= (2+tranboo) * (1+.5*transtre1*(1-transbas1)) * tg * trans1 );
+//  out = raw * (g_= (2+tranboo) * (.5+.5*((1-transtre1)+(1-transbas1))) * tg * trans1 );
+  out = raw * (outg = (g_= (2.5+.5*tranboo) * tg2 * trans1 ));
+  g = 1/(g_/ (1+.5*(comp1+maxim1)) +1);
+  
+  out;
+);
+
+
+lim.thr = .9;
+
+function limiter()
+  instance(ina thr ovr ovr1 g )(
+  
+  ina = max(abs(spl0),abs(spl1));
+  
+  thr = this..thr;
+  ina > thr ? (
+    ovr1 = (ovr=ina-thr)/(1-thr);
+    g =  (thr+(ovr/(1+ovr1))) / ina;
+    ovr1 > 1 ? peaking = max(peaking,2) :
+    peaking = max(peaking,1);
+  ):(
+    g += (1-ina*g) * (1-g*g) * .01;
+    peaking = max(peaking,0);
+  );
+  
+  
+  
+  g = min(1,max(.01,g));
+  
+  
+  
+  spl0 *= g;
+  spl1 *= g;
+  
+);
+
+// g * atts^attlen = thr/ina
+// atts = (thr/ina/g)^(1/attlen)
+// 1 * .5^x = .125
+
+//decay = .05;
+
+function reset_LR(id zero st)
+  instance(rst fast.gr slo.gr gLfmin gRfmin g zer decay)(
+  
+  this.st = st;
+//  zer = (1-(id==8))*(1-(id==20)) ;
+  id == 20 ? zer = 0 : zer = 1 ;
+
+//  this.L.slo.gr == (1-zer) || this.R.slo.gr == (1-zer) ? start = 1;
+  
+  start == 1 ? (
+    this.L.slo.gr = this.R.slo.gr = zer;
+  );
+  
+  
+  this.rst == 1 || start == 1 ? (
+    this.L.fast.gr = gLfmin = zer;
+    st ? this.R.fast.gr = gRfmin = zer;
+//    this.L.slo.gr += decay;
+//    this.R.slo.gr += decay;
+//    id == 20 ? (
+//      this.L.slo.gr = this.L.slo.gr * (1-decay) -decay*.1;
+//      this.R.slo.gr = this.R.slo.gr * (1-decay) -decay*.1;
+      this.L.slo.gr *= decay;
+      id == 20 || st == 1 ? this.R.slo.gr *= decay;
+//    ):(
+//      this.L.slo.gr = this.L.slo.gr * (1+decay) +decay*.1;
+//      st ? this.R.slo.gr = this.R.slo.gr * (1+decay) +decay*.1;
+//    );
+    this.rst = 0;
+  );
+
+  this.ena == 0 && id != 20 ? this.L.g = this.R.g = 1;
+
+  
+  zero == 0 ? (
+    this.L.fast.gr = this.R.fast.gr = zer;
+    
+  ):(
+    this.rst == 0 ? (
+      id == 20 ? (
+        this.L.fast.gr = max(gLfmin,this.L.g);
+        this.R.fast.gr = max(gRfmin,this.R.g);
+        this.L.slo.gr = max(this.L.slo.gr,this.L.g);
+        this.R.slo.gr = max(this.R.slo.gr,this.R.g);
+      ):(
+        this.L.fast.gr = min(gLfmin,this.L.g);
+        this.L.slo.gr = min(this.L.slo.gr,this.L.g);
+        st ? (
+          this.R.fast.gr = min(gRfmin,this.R.g);
+          this.R.slo.gr = min(this.R.slo.gr,this.R.g);
+        );
+      );
+    );
+  );
+);
+
+function reset_MS()
+  instance(rst fast.gr slo.gr gmfmin gsfmin g)(
+  
+  this.rst == 1 ? (
+    this.M.fast.gr = gmfmin = 1;
+    this.S.fast.gr = gsfmin = 1;
+    this.M.slo.gr += decay;
+    this.S.slo.gr += decay;
+    this.rst = 0;
+  );
+  this.rst == 0 ? (
+    this.M.fast.gr = min(gmfmin,this.M.g);
+    this.S.fast.gr = min(gsfmin,this.S.g);
+    this.M.slo.gr = min(this.M.slo.gr,this.M.g);
+    this.S.slo.gr = min(this.S.slo.gr,this.S.g);
+  );
+);
+ 
+function maximizer()(
+  spl0 = maxibas.L.eqpole(spl0);
+  spl1 = maxibas.R.eqpole(spl1);
+  hard == 0 ? (
+    spl0 = maxinotch.L.eqpole(spl0);
+    spl1 = maxinotch.R.eqpole(spl1);
+  );
+  spl0 = maxipretre.L.eqpole(spl0);
+  spl1 = maxipretre.R.eqpole(spl1);
+//  spl0 = maxibas.L.eqpole(spl0);
+//  spl1 = maxibas.R.eqpole(spl1);
+  spl0 *= maxim.L.maximize( max(abs(spl0),abs(spl1)) );
+  spl1 *= maxim.L.gout;
+//  spl1 *= maxim.R.maximize(spl1);
+  hard == 1 ? (
+    spl0 = maxinotch.L.eqpole(spl0);
+    spl1 = maxinotch.R.eqpole(spl1);
+  );
+  spl0 = maxipostbas.L.eqpole(spl0);
+  spl1 = maxipostbas.R.eqpole(spl1);
+  spl0 = maxiposttre.L.eqpole(spl0);
+  spl1 = maxiposttre.R.eqpole(spl1);
+);
+
+function splblock(id)
+  instance(Ltmp Rtmp compinL compinR compin trin)(
+  maxim.order == id && maxim1 > 0 && maxim.ena == 1 ? (
+    Ltmp = spl0;
+    Rtmp = spl1;
+    maximizer();
+    spl0 = maximix * spl0 + maximixi * Ltmp;
+    spl1 = maximix * spl1 + maximixi * Rtmp;
+  ) :
+  
+  comp.order == id && comp1 > 0 && comp.ena == 1 ? (  
+    comphpf > 20 ? (
+      compinL = comphp.L.eqpole( spl0 );
+      compinR = comphp.R.eqpole( spl1 );
+      compin = max(abs(compinL),abs(compinR));
+    ):(
+      compin = max(abs(spl0),abs(spl1));
+    );
+    comp.L.comp( compin );
+    spl0 *= (comp.L.g) * compvol *compmix + (1-compmix) ;
+    spl1 *= (comp.R.g = comp.L.g) * compvol *compmix + (1-compmix);
+//    spl1 = comp.R.comp(spl1);
+  ) :
+  
+  trans.order == id && trans1 > 0 && trans.ena == 1 ? (
+/*
+    spl0 = (spl0 + trans.L.transient(L.trin) ) * transvol;
+    spl1 = (spl1 + trans.R.transient(R.trin) ) * transvol;
+*/    
+
+    trin = (L.trin + R.trin);
+//    trin = max(abs(L.trin),abs(R.trin));
+    trans.LR.transient(trin);
+    trans.L.transient(L.trin);
+    trans.R.transient(R.trin);
+//    spl0 *= (1+trans.L.outg) *transvol;
+//    spl1 *= (1+trans.L.outg) *transvol;
+
+    spl0 = (spl0 + trans.L.raw * trans.LR.outg ) * transvol;
+    spl1 = (spl1 + trans.R.raw * trans.LR.outg ) * transvol;
+    
+
+  ) :
+
+  eq.order == id && eq.ena == 1 ? (
+    eqbasg != 0 ? ( spl0=eqbas.L.eqpole(spl0); spl1=eqbas.R.eqpole(spl1); );
+    eqmidg != 0 ? ( spl0=eqmid.L.eqpole(spl0); spl1=eqmid.R.eqpole(spl1); );
+    eqtreg != 0 ? ( spl0=eqtre.L.eqpole(spl0); spl1=eqtre.R.eqpole(spl1); );
+  );
+);
+
+
+function upsli()(
+  
+  maxim.ena = slider40;
+  comp.ena = slider41;
+  trans.ena = slider42;
+  eq.ena = slider43;
+  lim.ena = slider44;
+  
+  maxim1 = slider5^1.5;
+//  maxiboo = 1+6*slider11^2;
+  maxibas1 = slider14;
+  maxipretre1 = slider24;
+  hard = slider23;
+  
+  maxibasdb = 12*maxibas1*(1+(maxibas1<0));
+  maxibas.eqini(1,ftmp=100+50*abs(maxibas1)+70*maxim1,gtmp= (-20+4*hard)*maxim1^(.25) +(maxibasdb),wtmp=1);
+  maxipostbas.eqini(1,ftmp*(1.1-.1*hard -.1*maxim1^2),
+//   -gtmp*(abs(gtmp*.04+.01)^.75 / abs(gtmp*.04+.01)) *(.6+.4*(gtmp<0)-.25*maxim1)
+//   -gtmp*(abs(gtmp*.04+.01)^.75 / abs(gtmp*.04+.01)) 
+  -gtmp *  ((tmp = abs(gtmp * (.01*(1-maxim1) +.01*maxim1^3 ))) / (tmp +1) / tmp )
+
+//   +abs(maxibasdb)*.25
+   +max(0,maxibasdb)*.25
+   +max(0,-maxibasdb - 24 *maxim1 *max(0,-maxibas1)^2 ) *.15
+   +(1*(1-hard) + 0*hard )*maxim1^2
+   ,wtmp*(1.3-.3*hard) );
+
+
+  maxithr = 1-.8*maxim1^.5 -.15;
+  maxiboo = 1+( (480-100*hard) * (1/(maxibas1*.4 +min(0,maxipretre1)*.3 +1)) )*maxim1^1;
+//  maxivol =  1/(((maxiboo-1)/5)^.5 *3)+1 ;
+//  maxivol =  1/( (((maxiboo-1)/2.5)^.5 * ( 5.5 +.0*maxibas1 +maxipretre1) )+1 );
+//  maxivol =  1/( (((maxiboo-1)/2.5)^.4 * ( 3.5 +.0*maxibas1 +maxipretre1) )+1 );
+
+//  maxivol = 1/(  (((tmp = maxiboo *.05))/(tmp*.5+1) /(tmp)*maxiboo +1)   );
+//  maxivol = 1/(  (((tmp = maxiboo *.03))/(tmp+1) /(tmp)*maxiboo +1)   );
+//  maxivol = 1/(  (((tmp = maxiboo *.05)*3)/(2*tmp+1) /(tmp)*maxiboo /(1+ 4*maxim1*(1-maxim1)^2) +1)   );
+//  maxivol = 1/(  (((tmp = maxiboo *(.04+.01*hard))*3)/(2*tmp+1) /(tmp)*maxiboo /(1+ 4*maxim1*(1-maxim1)^2) +1)   );
+//  maxivol = 1/(  (((tmp = maxiboo *(.052+.012*hard))*3)/(2*tmp+1) /(tmp)*maxiboo  +1)   );
+  maxivol = 1/(  (
+  (tmp = maxiboo * (.05+.008 *hard -.016*maxim1^2 -.006* max(0,-maxibas1)^.5
+  -.002*maxipretre1 - (.006+.003*hard)*max(0,maxipretre1) ) )
+  /(1*tmp+1) /(tmp)*maxiboo +1
+  )   );
+
+
+//  maxivol = 1/(  (atan(tmp=maxiboo *.06) /(tmp)*maxiboo +1)   );
+  maximix = slider22;
+  maximixi = 1-maximix;
+  
+  comp1 = slider6^.7;
+  compmix = slider3;
+  rel1 = slider7;
+  ratio1 = slider13;
+  comphpf = 20 + 380 * (comphp1 = slider11)^2;
+
+  ratio1 == 1 ? (
+    ratio = 100;
+    
+  ):(
+//    ratio = slider13^2.8 *7 +1;
+//    ratio = ratio1^.65 *7 + 10*ratio1^6 +1;
+//    ratio = ratio1*15 + 10*ratio1^8 +1;
+    ratio = ratio1 * 5.1 + ratio1^5 * 14.9 +1;
+    ratm = 1 - 1/ratio;
+  );
+  // rat 2 m .5 , rat 4 m .75
+  thro = 2^((comp1*-30)/6);
+//  thr2 = 2^((comp1*(-66 + 2* min(8,ratio)) )/6);
+  thr2 = 2^((comp1*(-60 - 6*(1-ratio1)) )/6);
+  thr2db = 19.93*log10(thr2);
+//  thr = thr2 *(1.4+comp);
+  thr = min(1, thr2 *(2+8*comp1));
+  cran = thr-thr2;
+  crandb = (thrdb = 19.93*log10(thr) ) - thr2db;
+  //thr = 2^(slider1/6);
+  //compvol = 1/ ((thr-1) * (1-thr*2 )^2 +1 );
+  //thrdb = 19.93*log10(thr) ;
+  //compvol = min(1,thrdb/-18) * 
+  thri = 1/thr ;
+  //compvol = (thri-1) / (1/ (thri-1) ) +1;
+  //compvol = (thri-1) / (1/ (thri-1) +1) ;
+//  compvol = (thri-1)/(1/(thri-1)+9) +1;
+//  compvol = comp1^3 * 4 +1;
+
+//  compvol_ = (1 - cos(comp1 *1.57) )^3  *2 +comp1*.5 +1;
+//  compvol = compvol_ + (1-compvol_)/ratio;
+
+//  compvol = 1+ (tmp = comp1^4 * (1-thr) *2) - tmp/ (((ratio-1)/2)^4 +1);
+//  compvol = 1+ (tmp = comp1^4 * (1-thr) *2) - tmp * (1/((ratio-1)^4 +1));
+//  compvol = 1+ (tmp = comp1^4 * (1-thr) *(1.5+rel1)) - tmp * (1- ratio1)^5;
+//  compvol = 1+ (tmp = comp1^4 *(1.5+1.5*rel1)) * (.5-cos(ratio1*3.14)*.5 );
+//  compvol = 1;
+  /*
+  //respms = slider2^2 * 50;
+  //respmul = min(1, 1/(respms/1000*srate));
+  attms = max(.2, slider3^2 * 100 );
+  //atts = min(1, 1/(attms/1000*srate) );
+  attlen = max(3, (attms/1000*srate) );
+  // atts 1 = 1/48k ms .. atts .01 = 
+  atts =  1-1.4/(attlen/10) ;
+  */
+  //attmul = 2^(( -12/atts )/6);
+  
+  //relms = slider4^3 * 500;
+  //relms = slider7^3 * 49 +1;
+//  relms = 1+ rel1^2.05 *99;
+  relms = 1+ rel1^1.33 *99;
+  relspls = relms/1000 * srate;
+  rels = min(1, 1/(relms/1000*srate) );
+  //trans = slider8 * (1 + comp1 + maxim1);
+//  trans = slider8^1.5 * (2 + .5* min(1,comp1 + maxim1) );
+//  tranmul = (3-slider9)^4;
+//  tranms = .1 + (slider9/2)^2 * 50;
+//  tranms = .1 + min(1,slider9)^2 * 9.9 + max(0,slider9-1)^2 * 40;
+//  tranms = .1 + min(1,slider9)^2 * 9.9 + max(0,slider9-1)^2 * 40;
+//  trans1 = slider8^1.7;
+//  trans1 = (1 - cos(slider8*1.57))^.75;
+  trans1 = (1 - cos(slider8*1.57));
+  tranlen1 = (tranlen2 = slider9) *.5;
+//  tranms = .1 + (tranlen2*.5)^2.3 * 100;
+  tranms = .1 + (tranlen2*.5)^2.7 * 100;
+  transpls = (tranms/1000 * srate) ;
+//  transplsi = 1/(transpls);
+  traninmul = .25+.75*((1-transbas1)+.25*(1-transtre1)) ;
+  tranrelmul = .0001 + (2-tranlen2) * .0001;
+//  tranhp = 20 + 980 * slider11^2;
+//  trantone = slider10;
+////  tranbass = max(0, abs(trantone)-.5) *2 *sign(trantone);
+//  tranbass =  abs(trantone)^2 *sign(trantone);
+  transbas1 = slider12;
+  transtre1 = slider10 ;
+  tranlsf = 12* transbas1*(1+(transbas1<0));
+  tranhsf = 18* slider10 ;
+  transauto = slider21;
+  mix = slider19;
+/*
+  vol = 2^((slider20-(
+   ( trans1^1.5 *5 +trans1*(tranlen2 +(2.5*transbas1)+(.05*tranhsf)) )
+   + 4* ((tmp=maxim1*comp1)*3)/(2*tmp+1)
+   ) )/6);
+*/
+  
+  vol = 2^((slider20-0*(2+(comp.order>maxim.order))*(maxim.ena*comp.ena)*comp1*maxim1)/6);
+
+  
+  msbal = .7; // smaller = wider
+  
+  comphp.eqini(0,comphpf,0,1);
+//  tranhp.eqini(0,tranhp,0,1);
+  trantre.eqini(3,8000,tranhsf,4);
+//  tranbas.eqini(1,170,-tranbass*3 +tranlsf,1.5);
+  tranbas.eqini(1,100+50*abs(transbas1),tranlsf,1);
+//  tranbashf.eqini(1,slider12,slider13,slider14);
+  
+//  maxinotch.eqini(2,3500,-1*maxim1^2,2);
+  maxinotch.eqini(2,4500+00*hard,-1.5*(1-hard)*maxim1^2 -1.5*hard * maxim1^1.8 , 2.5*(1-hard)+1.5*hard);
+//  maxinotch.eqini(2,3500,-1.5*maxim1^2 * min(1,maxipretre1+1),1.5);
+//  maxinotch.eqini(2,3500,3*maxim1^2,1.5);
+//  maxitre.eqini(3,12000,6*maxim1^.7,2);
+//  maxitre.eqini(3,12000,maxitredb=(maxitre1=slider18)*(12+12*(maxitre1<0)),1);
+//  maxipretre.eqini(3,12000,(maxim1^.5*maxipretredb=maxipretre1*(12+12*(maxipretre1<0))),1);
+  maxipretre.eqini(3,8500,-8*(1-hard)*maxim1^1.5 -3*hard*maxim1^1.3 +(maxim1^.5*(maxitredb=maxipretre1*(12*(maxipretre1<0)))),1);
+  maxiposttre.eqini(3,12000-4000*hard,(maxitredb += 12* max(0,maxipretre1)) +(14*(1-hard)+1*hard)*(maxim1^(.75+1.25*hard)), 2);
+//  maxibas.eqini(1,150,-maxim1^2,1);
+
+  eqtreg = slider30 *15;
+  eqtref = 5000 + 10000 * slider31^2;
+  eqmidg = slider32 *15;
+  eqmidf = 100 + 9900 * slider33^2;
+  eqmidw = slider37;
+  eqbasg = slider34 *15;
+  eqbasf = 50 + 450 * slider35^2;
+  eqtre.eqini(3, eqtref,eqtreg,1.5);
+  eqmid.eqini(2, eqmidf,eqmidg,eqmidw / (1 + (eqmidg<0)) );
+  eqbas.eqini(1, eqbasf,eqbasg,1.5);
+
+
+  startg == 0 ? (
+//    slider15+slider16+slider17+slider18 != 10 ? (
+/*
+    moving = 0;
+    n1 = 15; n2 = 16;
+    loop(3,
+      slider(drag) == slider(n2) ? moving = 1;
+      
+      (n2 += 1) > 18 ? (
+        n1 += 1;
+        n2 = n1+1;
+      );
+    );
+    moving == 1 ? (
+      moving = 0;
+*/
+    (slimul = slider15^2 * slider16^2 * slider17^2 * slider18^2) != 576 && atslider == 0 ? (
+      _der += 1;
+
+      empty = 0;
+      n = 1;
+      loop(4,
+        empty == 0 && floor(slider15+.5) != n && floor(slider16+.5) != n 
+        && floor(slider17+.5) != n && floor(slider18+.5) != n ? empty = n;
+        n += 1;
+      );
+      
+      empty > 0 ? (
+        slimul < 576 ? mv = 1 : mv = -1;
+        n = 15;
+        loop(4,
+          n != drag && slider(n) == (empty-mv) ? (
+            slider(n) += mv;
+//            (empty -= mv) == slider(drag) ? (empty = mv = -1);
+            
+          );
+          n += 1;
+        );
+      );
+        
+
+      maxim.order = (slider15 = floor(slider15+.5) );
+      comp.order = (slider16 = floor(slider16+.5) );
+      trans.order = (slider17 = floor(slider17+.5) );
+      eq.order = (slider18 = floor(slider18+.5) );
+      
+      slider_automate(slider15);
+      slider_automate(slider16);
+      slider_automate(slider17);
+      slider_automate(slider18);
+    ):(
+      maxim.order = slider15;
+      comp.order = slider16;
+      trans.order = slider17;
+      eq.order = slider18;
+    );
+    atslider = 0;
+  );
+  
+  _dercur = cur;
+  _derempty = empty;
+  
+/*  trans.order < comp.order ? transmul = .5 * trans1 : transmul = 0;
+  compvol = 1+ (comp1^4 * (1.3+transmul)* (((tmp=min(1,ratio1*2))*3)/(2*tmp+1)) *(1+(.5+ratio1^2)*rel1^2)) ;
+*/
+  
+  tranvolmul = (1- (trans.order<comp.order) * comp.ena*compmix*ratio1^.25 *comp1) * (1-(trans.order<maxim.order) * maxim.ena*maxim1 );
+   
+//  tranboo = (trans.order>=(comp.order+maxim.order)) * maxim1 *comp1;
+  tranboo = .5*((trans.order>comp.order) * comp.ena*ratio1^.25 *comp1^2 + (trans.order>maxim.order) * maxim.ena*maxim1^2)^2;
+//  transvol_ = 1 / (trans1^1.1 *1.2 *tranvolmul *(1+.2*tranboo) * (1+(1-tranlen1)^4*1*tranboo) * (.55* tranlen1^.6 +1) +1);
+  transvol_ = 1 / (trans1^1.1 *1.2 *tranvolmul *(1+.2*tranboo) * (1+(1-tranlen1)^4*0*tranboo)
+//   * (1+ 2.5* tranlen1^.7) +1);
+   * (1+ 2* atan(4*tranlen1) ) +1);
+//  transvol_ *= 2^((trans1*.1*(-tranlsf*1.3-1.3*abs(tranlsf) -1.2*tranhsf) )/6);
+  transvol_ *= 2^((trans1*.1*(-tranlsf*(.5+2*(tranlsf>0)) -1.2*tranhsf) )/6);
+  
+  transvol = transauto * transvol_ + (1-transauto);
+//  compvol = 1+ (comp1^(4) * (3)* (((tmp=min(1,ratio1*2))*3)/(2*tmp+1)) *(1+(.5+ratio1^2)*rel1^2)) ;
+/*                            .5 - -1.5
+  compvol = 1+ (
+    comp1^(1.5+3*ratio1^.25) * (4-1*ratio1)* ( (( tmp=min(1,ratio1*2) )*3)/(2*tmp+1) )
+//    * (1+(comp1*ratio1+(1-comp1)*(1-ratio1)^2)*rel1 )
+    * (1 + .5*ratio1^(1+comp1*2*(1-rel1)) * rel1 +  2* (1-ratio1)*rel1*(1-comp1))
+    );
+*/
+/*
+  compvol = 1+ (
+    comp1^(1+4*ratio1^.25) * (4+0*ratio1)* ( (( tmp=min(1,ratio1*2) )*3)/(2*tmp+1) )
+//    * (1+(comp1*ratio1+(1-comp1)*(1-ratio1)^2)*rel1 )
+    * (1 + 1*ratio1^(1+comp1*0) * rel1 +  (2*rel1 +1)* (1-ratio1)*(1-comp1)^.25)
+    );
+*/
+  compvol = 2^((
+    ( (cvt = (.47*comp1)* -19.93*log10(thr)) - ((cvt)*3)/(2*cvt+1) )
+//    * (1-(1/ratio))^(2-ratio1*1.5)
+//    * (1+ 2* comp1^2*(1-comp1) *(1-ratio1))
+
+//    * ((tmp = 1-1/ ((ratio-1)*(.5+.5*ratio1)+1) )*3)/(2*tmp+1)
+//    *  sin( (1-1/((ratio-1)*1+1)) *1.3 )
+    *  sin( (1-1/((ratio-1)*.9+1)) *1.4 )
+    * (1+ .2* rel1^.5)
+//    * (1-(.75 -.53*(rel1^.2))*(1-) * comphp1^.2)
+//    * ( 1 / (1+ (comphpvol =comphp1^(.4+.4*rel1^.2)) *( .6-.45*rel1^.2) *comp1^.15) ) // up to 200Hz
+    * ( 1 / (1+ (comphpvol =comphp1^(2 +.4*rel1^.2)) *( .8-.45*rel1^.2) *comp1^.15) ) // Up to 400Hz
+    
+    )/6);
+
+
+);
+
+@serialize
+
+store_01 = file_var(0, dragged);
+store_02 = file_var(0, startg);
+
+
+@slider
+/*
+maxim.order = slider15;
+comp.order = slider16;
+trans.order = slider17;
+eq.order = slider18;
+*/
+atslider = 1;
+
+upsli();
+
+@block
+
+willupslib > 0 ? upsli();
+
+
+// MOVE:
+
+@sample
+
+L.raw = L.trin = spl0;
+R.raw = R.trin = spl1;
+//M.raw = ( (L.raw=spl0)+(R.raw=spl1))*.5;
+//S.raw = (spl0-spl1)*msbal;
+/*
+tranhp > 20 ? (
+  L.trin = tranhp.L.eqpole(L.trin);
+  R.trin = tranhp.R.eqpole(R.trin);
+);
+*/
+trans.ena > 0 && trans1 > 0 ? (
+  tranlsf != 0 ? (
+    L.trin = tranbas.L.eqpole(L.trin);
+    R.trin = tranbas.R.eqpole(R.trin);
+  );
+  tranhsf != 0 ? (
+    L.trin = trantre.L.eqpole(L.trin);
+    R.trin = trantre.R.eqpole(R.trin);
+  );
+);
+
+splblock(1);
+splblock(2);
+splblock(3);
+splblock(4);
+
+//spl0 = L.trin;
+//spl1 = R.trin;
+
+spl0 *= vol;
+spl1 *= vol;
+mix < 1 ? (
+  spl0 = spl0 * mix + (1-mix) * L.raw;
+  spl1 = spl1 * mix + (1-mix) * R.raw;
+);
+lim.ena ? lim.LR.limiter();
+
+vol.L.g = abs(spl0);
+vol.R.g = abs(spl1);
+
+maxim.reset_LR(5,maxim1,0);
+comp.reset_LR(6,comp1,0);
+trans.reset_LR(8,trans1,1);
+vol.reset_LR(20,1,1);
+
+
+
+
+//slider18 = 19.93 * log10((M.g + S.g) *.5);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@gfx 483 474
+/*
+mouse_cap == 10 && slider15 == 1 && slider16 == 2 && slider17 == 3 && slider18 == 4 ? (
+  eq.order = trans.order = comp.order = maxim.order = 0;
+  startg = 1;
+);
+*/
+
+eq.eqbasf.y > bloh ? startsz = 0;
+
+
+function xy(x y)(
+  gfx_x = x;
+  gfx_y = y;
+);
+
+function szini()(
+  gfx_setfont(8,"Verdana",sz1*2);
+  gfx_setfont(7,"Verdana",ceil((sz1+sz2)*.5) );
+  gfx_setfont(6,"Verdana",sz1*1.3,'b');
+//  gfx_setfont(5,"Courier",sz2*2,'');
+//  gfx_setfont(5,"PT Mono",sz2*1.9);
+  gfx_setfont(5,"American Typewriter",sz2*2);
+  gfx_setfont(4,"Courier",sz2*1.3);
+  gfx_setfont(3,"Courier",sz2*1.5);
+  gfx_setfont(2,"Verdana",sz2);
+  gfx_setfont(1,"Verdana",sz1);
+  gfx_measurestr("Saturationi", blow,0);
+  blow = ceil(blow/4) *4;
+  sliw = ceil(blow * .18) *2;
+  potsz1 = ceil(sliw * .6 );
+  potsz2 = ceil(sliw * .55 );
+  potsz3 = ceil(sliw * .65);
+  potsz4 = ceil(sliw * .6);
+  blox0 = ceil(wlim*.02);
+  //bloy = floor(hlim * .03);
+  //bloy = gfx_y*2 + gfx_texth;
+  y0 = floor(bloy + gfx_texth*1.6);
+  bloh = hlim -bloy  - 10;
+  swih = ceil(blow*.6);
+);
+
+
+gfx_setfont(1);
+
+
+startg == 1 && dragged == 0 ? (
+  _star += 1;
+//  slider15 != 1 || slider16 != 2 || slider17 != 3 || slider18 != 4 ? (
+
+/*
+  xy(blox0,sz2*1.4);
+  gfx_setfont(8);
+  gfx_set(1,1,1,intra=1-intra);
+  gfx_drawstr("->
+Drag
+modules
+from
+their
+titles!");
+*/
+  szini();
+  gmem[1] == 0 ? (
+  
+    sspd = .18;
+    
+    z = 0;
+    gfx_set(1,1,1,1);
+    loop(6,
+      xy(xar-(z)*blow*1,bloy+gfx_texth*.3);
+  //    gfx_a = tmpa = (tmpa==1?.5:1);
+      gfx_a = 1;
+      gfx_x < mix.blox ? gfx_drawstr(">");
+      xy(mix.blox-(xar-(z+1)*blow),bloy-gfx_texth*.3);
+      gfx_x < mix.blox ? gfx_drawstr("<");
+      
+      z += 1;
+    );
+  
+    xar += sspd * blow *.65;
+
+    gfx_set(0,0,0,1);
+  
+    eq.order < slider18 ? eq.order += sspd :
+    (eq.order = slider18;
+  //  gfx_rect(blox0+3*blow,bloy,blow,bloh);
+    trans.order < slider17 ? trans.order += sspd :
+    (trans.order = slider17;
+  //  gfx_rect(blox0+2*blow,bloy,blow*2,bloh);
+    comp.order < slider16 ? comp.order += sspd :
+    (comp.order = slider16;
+  //  gfx_rect(blox0+1*blow,bloy,blow*3,bloh);
+    maxim.order < slider15 ? maxim.order += sspd :
+    (maxim.order = slider15;
+    startg = 0;
+    gmem[1] = 1;
+    ););););
+    
+  ):(
+  
+    maxim.order = slider15;
+    comp.order = slider16;
+    trans.order = slider17;
+    eq.order = slider18;
+  );    
+
+):(
+  startg = 0;
+);
+
+
+//y0 = ceil(hlim * .05 + gfx_texth);
+y9 = ceil(hlim * .9);
+
+willupslig > 0 ? upsli();
+
+function aspect()(
+  wlim = max(210 , min( 900 , gfx_w ));
+//  hlim = max(245 , min( 850 , gfx_h ));
+//  hlim = max(245 , min( ceil(wlim*1.5) , gfx_h ));
+  hlim = max(235 , min( ceil(blow * 10) , gfx_h ));
+  szok = 0;
+//  startsz = 0;
+);
+
+function mou(id mi ma)
+  instance(x y w h mr mi ma)(
+  
+  mr = w/2 +4;
+  
+  drag == 0 && dblclk == 0 && mouse_cap > 0 &&
+//  mouse_x > x-r && mouse_x < x+r && mouse_y > y-r && mouse_y < y+r ? (
+  mouse_x > x-mr && mouse_x < x+mr && mouse_y > y && mouse_y < y+h ? (
+    drag = id;
+  );
+  
+  
+  drag == id ? (
+//    id > 8 && id <= 18 ? mspd = 1 :
+    mspd = 1;
+    
+    mous = (mouse_x - mouxold) + (mouyold - mouse_y);
+    slider(id) += mous / (hlim) *1.4 * (ma-mi) * mspd;
+    slider(id) = min(ma, max(mi, slider(id)));
+    willauto = id;
+  );
+);
+    
+
+function slidr(id)
+  instance(x y w r h a pos mi ma yz sliy ena)(
+  
+  sliy = y;
+  
+  id == 20 ? (mi = -24; ma = 12;):(mi = 0; ma = 1);
+  
+  slider(id) == mi || (ena == 0 && id != 19 && id != 20) ? a = .3 : a = 1;
+  
+//  x = gfx_x;
+//  y = this.y;
+//  w = 30;
+//  r = w/2;
+//  h = y9 - y ;
+  gfx_setfont(2);
+
+  h = floor(bloh -y - gfx_texth*.5);
+  
+  
+  gfx_set(gr=.07,gr,gr,1);
+  gfx_circle(x,y+r,r+ps , 1);  
+  gfx_circle(x,y+h-r,r+ps , 1);
+  gfx_rect(x-r-ps,y+r,r*2+ps*2+1,h-r*2);
+  
+  gfx_set(gr=.7,gr,gr,1);
+  gfx_arc(x,y+r,r , -1.5,1.5);
+  gfx_arc(x,y+h-r,r , 1.6,4.7);
+  gfx_line(x-r,y+r,x-r,y+h-r);
+  gfx_line(x+r,y+r,x+r,y+h-r);
+  
+  id == 20 ? (
+    gfx_a -= .3;
+    gfx_rect(x-r*2+ps+1, yz=y+r + ma/(ma-mi) * (h-r*2)-psl ,r-ps,ps*2 ,0);
+//    gfx_rect(x+r, yz,r-ps,ps*2 ,0);
+  );
+  
+  pos = floor( y+r + (h-2*r) * (1- (slider(id)-mi)/(ma-mi) ) );
+  
+  gfx_a = (id == 20 ? (a=1) : a);
+  gfx_circle(x,pos,r-psl ,1);
+//  gfx_set(gr=.07,gr,gr,1);
+  gfx_set(gr=.25-.2*a,gr,gr,1);
+  gfx_circle(x,pos,r-psl*2 ,1);
+  gfx_set(gr=.55,gr,gr,a);
+  gfx_circle(x,pos,r-psl*3 ,1);
+  gfx_set(gr=.55*a,gr,gr,a);
+  gfx_circle(x,pos,r-psl*4 ,1);
+  gfx_set(gr=.47*a,gr,gr,a*a);
+  gfx_circle(x,pos,r-psl*5 ,1);
+  
+//  xy(x , y+h + 5);
+//  xy(blox0 + (this.order -.5) * blow , bloy+bloh -hlim *.005);
+  gfx_setfont(2);
+  xy(blox0 + (this.order -.5) * blow , bloy+bloh -gfx_texth *1.0 );
+  sprintf(#this.sliva,"%.1f", slider(id)*(id==20?1:10));
+  gfx_set(gr=txta-.15,gr,gr,a);
+  gfx_setfont(6);
+  gfx_drawstr(#this.sliva , 261,gfx_x,gfx_y);
+  
+  this.mou(id,mi,ma);
+
+//  xy(x + w , y);
+);
+
+function meters(id)
+  instance(x y r w mtrw h n valL1 valR1 valL2 valR2 inpr rst
+   holdL holdR holdLc holdRc inLf1 inRf1 inLs1 inRs1
+    val line rr gg bb zer st decay)(
+  
+  id == 5 ? (ran = -48; zer = 1;) :
+  id == 8 ? (ran = -12; zer = 1;) :
+  id == 20 ? (ran = -48; zer = 0;) :
+  (ran = -24; zer = 1; );
+  
+  decay = 1 -(ran) * .003;
+  id == 20  ? decay = 1/decay;
+  
+  mtrw = (w1 = ceil(w/6))*2 +1;
+  n = 0; // Peak meter narrower
+//  y = gfx_y;
+  x1 = gfx_x;
+  x2 = x1 + w1 +1;
+//  h = y9 - (y += r) -r ;
+  y += r;
+  h -= r*2;
+  
+  
+  this.L.slo.gr == (1-zer) || this.R.slo.gr == (1-zer) ? (
+    szok = 0;
+    this.L.slo.gr = this.R.slo.gr = zer;
+  );
+  
+  startg == 1 ? (
+    this.L.fast.gr = this.R.fast.gr = this.L.slo.gr = this.R.slo.gr = zer;
+  );
+
+
+  // gr to range multiplier
+/*
+  inMf1 = max(0, min(1, (19.93 * log10(this.M.fast.gr))/(ran) ));
+  inSf1 = max(0, min(1, (19.93 * log10(this.S.fast.gr))/(ran) ));
+  inMs1 = max(0, min(1, (19.93 * log10(this.M.slo.gr))/(ran) ));
+  inSs1 = max(0, min(1,  (19.93 * log10(this.S.slo.gr))/(ran) ));
+*/
+  inLf1 = max(0, min(1, (19.93 * log10(this.L.fast.gr))/(ran) ));
+  inLs1 = max(0, min(1, (19.93 * log10(this.L.slo.gr))/(ran) ));
+  inRf1 = max(0, min(1, (19.93 * log10(this.R.fast.gr))/(ran) ));
+  inRs1 = max(0, min(1, (19.93 * log10(this.R.slo.gr))/(ran) ));
+  
+  id == 20 ? (
+    inLf1 = 1-inLf1;
+    inLs1 = 1-inLs1;
+    inRf1 = 1-inRf1;
+    inRs1 = 1-inRs1;
+  );
+  id == 5 ? (
+    inLf1 = inLf1^2;
+    inLs1 = inLs1^2;
+    inRf1 = inRf1^2;
+    inRs1 = inRs1^2;
+  );    
+  
+  
+  // Draw meter base
+  gfx_set(gr=.05,gr,gr,.7);
+  gfx_rect(x1-ps,y-ps,mtrw+2*ps,h+2*ps ,1);
+  gfx_set(gr=.6,gr,gr,.5);
+  gfx_rect(x1-1,y-1,mtrw+2,h+2 ,0);
+  
+  yy = mtrw;
+  
+  // Meter scale lines
+  val = -6;
+//  loop(3,
+  while(val >= ran+1)(
+//    line = y+h*( 19.93*log10(val)/(ran));
+    id == 8 ? line = y+h*(1- val/ran) :
+    line = y+h*( val/ran);
+    gfx_line(x1-4,line,x1-1,line);
+    gfx_line(x1+mtrw,line,x1+mtrw+3,line);
+    val -= 6;
+  );
+  
+  
+  // Draw slow and fast meters
+  start == 0 ? (
+//    gfx_set(.0,1,.6,.5);
+    gfx_set(rr,gg,bb,.5);
+//    gfx_set(1,1,1,.5);
+    id == 8 || id == 20 ? (
+      st ? (
+        gfx_rect((x1),y+h-(valL1= floor(inLs1*(h))),w1,valL1 ,1);
+        gfx_rect((x1+n),y+h-(valL2= floor(inLf1*(h))),w1-n*2,valL2 ,1);
+        gfx_rect((x2),y+h-(valR1= floor(inRs1*(h))),w1,valR1 ,1);
+        gfx_rect((x2+n),y+h-(valR2= floor(inRf1*(h))),w1-n*2,valR2 ,1);
+      ):(
+        gfx_rect((x1),y+h-(valL1= floor(inLs1*(h))),w1,valL1 ,1);
+        gfx_rect((x2),y+h-valL1,w1,valL1 ,1);
+        gfx_rect((x1+n),y+h-(valL2= floor(inLf1*(h))),w1-n*2,valL2 ,1);
+        gfx_rect((x2+n),y+h-valR2,w1-n*2,valR2 ,1);
+      );
+    ):(
+      st ? (
+        gfx_rect((x1),y,w1, (valL1= floor(inLs1*(h))) ,1);
+        gfx_rect((x1+n),y,w1-n*2, (valL2= floor(inLf1*(h))) ,1);
+        gfx_rect((x2),y,w1, (valR1= floor(inRs1*(h))) ,1);
+        gfx_rect((x2+n),y,w1-n*2, (valR2= floor(inRf1*(h))) ,1);
+      ):(
+        gfx_rect((x1),y,w1, (valL1= floor(inLs1*(h))) ,1);
+        gfx_rect((x2),y,w1, valL1 ,1);
+        gfx_rect((x1+n),y,w1-n*2, (valL2= floor(inLf1*(h))) ,1);
+        gfx_rect((x2+n),y,w1-n*2, valL2 ,1);
+      );
+    );
+    
+    gr = .7;
+    gfx_set(gr,gr,gr,.5);
+  
+    // Peak hold calc
+    max(valL1,valL2) > holdL ? (
+      holdL = max(valL1,valL2) ;
+      holdLc = .05;
+    ):(
+      holdLc = max(.05 , holdLc * 1.3);
+      holdL = min(h, max(0,holdL - holdLc));
+    );
+    st ? (
+      max(valR1,valR2) > holdR ? (
+        holdR = max(valR1,valR2) ;
+        holdRc = .05;
+      ):(
+        holdRc = max(.05 , holdRc * 1.3);
+        holdR = min(h, max(0,holdR - holdRc));
+      );
+    );  
+    // Draw peak hold
+    id == 8 || id == 20 ? (
+      gfx_rect(x1,y+h-holdL,w1,1 ,1);
+      st ? (
+        gfx_rect(x2,y+h-holdR,w1,1 ,1);
+      ):(
+        gfx_rect(x2,y+h-holdL,w1,1 ,1);
+      );
+    ):(
+      gfx_rect(x1,y+holdL,w1,1 ,1);
+      st ? (
+        gfx_rect(x2,y+holdR,w1,1 ,1);
+      ):(
+        gfx_rect(x2,y+holdL,w1,1 ,1);
+      );
+    );
+  );
+  
+  start = 0;
+  
+  this.rst = 1;
+  
+);
+
+function pot(lbl id mi ma val)
+  instance(x y w h r val dotr dotx doty fract a)(
+  
+  this.minimum = ma;
+  
+  r = potsz;
+  a = gfx_a = this..a;
+//  x = this..x + this..r;
+  x = floor(this..blox + blow *.5);
+  y = this..y + r;
+  
+//  val = (slider(id)-mi)/(ma-mi);
+
+  /*
+  gfx_set(gr=.4,gr,gr,1);
+  gfx_circle(x,y,r , 1);
+  */
+/*
+  dotr = ceil(r *.15);
+  dotx = x- sin(val *5.28 +.5) * r*.9;
+  doty = y+ cos(val *5.28 +.5) * r*.9;
+  
+  gfx_set(gr=.0,gr,gr,1,0);
+  gfx_circle(dotx,doty,dotr ,1);
+*/
+  // Knob Line
+  gfx_setimgdim(2,-1,-1);
+  gfx_setimgdim(2,(rl= ceil(r*1.2))*2,rl*2);
+  gfx_dest = 2;
+  gfx_set(gr=.4,gr,gr,1);
+/*
+  tr = sz1/2;
+  gfx_triangle(rl-psl-tr+1,tr*.75, rl-psl+1,0, rl,tr*.5);
+  gfx_triangle(rl+psl+tr+1,tr*.75, rl+psl+1,0, rl,tr*.5);
+*/
+//  gfx_circle(rl,ps*2.5,ps*2.6 ,1);
+  gfx_circle(rl,rl*.35,rl*.35 ,1);
+  gfx_circle(rl,rl,r , 1);
+  
+/*  
+  id == 31 || id == 33 || id == 35 ? gfx_set( .6,.6,.45,a) :
+  id == 37 ? gfx_set( .52,.57,.6,a) :
+*/
+  this..ena == 0 ? gfx_set(gr=.4,gr,gr,1) :
+  
+  // Pot colors, treble middle midw bass
+  id == 10 || id == 24 || id == 30 ? gfx_set( .63,.63,.49,a) :
+  id == 32 ? gfx_set( .52,.6,.57,a) :
+//  id == 37 ? gfx_set( .52,.57,.6,a) :
+  id == 11 || id == 12 || id == 14 || id == 34 ? gfx_set( .58,.58,.72,a) : // Blue
+//  id == 12 || id == 14 || id == 34 ? gfx_set( .62,.52,.55,a) : // Red
+  gfx_set(gr=.6,gr,gr,a);
+  
+  
+//  gfx_circle(x,y,r-ps*2+1 , 1);
+  gfx_circle(rl,rl,r-ps*2+1 , 1);
+  
+  gfx_set(gr=.4,gr,gr,1);
+  gfx_circle(rl,rl*.25,rl*.2 ,1);
+  
+  
+  
+  gfx_set(0,0,0,1,0);
+  gfx_circle(rl,r*.25,r*.15  , 1);
+//  gfx_rect(ceil(rl-ps*.5),ps,ps+1,ps*2.5);
+  
+  gfx_dest = -1;
+  xy(floor(x-rl),floor(y-rl));
+  gfx_a = 1;
+  gfx_blit(2,1, -2.5 + ((slider(id)-mi)/(ma-mi))*5);
+  
+  gfx_set(0,0,0,1,0);
+  
+  
+  gfx_setfont(val>999||id>=30?2:1);
+  xy(x,y);
+//  val = ceil(abs(val)*100)*.01*sign(val);
+  val >= 1000 ? (
+    sprintf(#valstr,"%.1f",val*.001+.001*sign(val) );
+    #valstr += "k";
+    gfx_drawstr( #valstr , 261,gfx_x,gfx_y);
+  ):(
+    fract =  (val>-10) * (val<10) ;
+    gfx_drawstr( sprintf(#valstr,(fract==1?"%.1f":"%.f"),val+.001*sign(val) ) , 261,gfx_x,gfx_y);
+  );
+  
+  xy(x, ceil(y +r ) );
+  gfx_set(gr=txta,gr,gr,1);
+  gfx_setfont(7);
+  gfx_drawstr(lbl,257,gfx_x,gfx_y);
+  
+  w = h = r *2;
+  y -= r;
+  this.mou(id,mi,ma);
+  
+  gfx_setfont(1);
+  
+  this..y = floor(gfx_y +gfx_texth*1.4);
+  gfx_a = a;
+);
+
+
+function switch(lbl pos id)
+  instance(x xc x1 x2 y w h r a ena order)(
+  
+  gfx_setfont(2);
+  y = y0+ floor(gfx_texth*.8) + (pos -1) * swih;
+  starta = min(1, max(0, pos*1.5-.5));
+  (ena = slider(id)) == 1 ? a = starta : a = starta*.4;
+
+
+  xc = floor(this..blox + blow *.5);
+  r = ceil(this..r *.65);
+//  y = ceil(this..y + r*1.1);
+  
+  x1 = xc-r;
+  x2 = xc+r;
+  x = x1-r;
+  
+  
+  
+//  gfx_set(1,1,1);
+//  gfx_circle(x1,y,r ,1);
+
+//  ena ? gfx_set(.18,gr=.05,gr,1) : gfx_set(gr=.07,gr,gr,1);
+  ena ? gfx_set(gr=.05,gr,gr,starta) : gfx_set(gr=.1,gr,gr,starta);
+  gfx_circle(x1,y,r+ps , 1);  
+  gfx_circle(x2,y,r+ps , 1);
+  gfx_rect(x1,y-r-ps,x2-x1,r*2+ps*2+1);
+  
+  gfx_set(gr=.9,gr,gr,a);
+  gfx_arc(x1,y,r , -3.14,0);
+  gfx_arc(x2,y,r , 0,3.14);
+  gfx_line(x1,y-r,x2,y-r);
+  gfx_line(x1,y+r,x2,y+r);
+  
+//  ena ? gfx_set(.95,.3,0,a) : gfx_set(gr=.5,gr,gr,a);
+//  ena ? gfx_set(gr = .6,a) : gfx_set(gr=.5,gr,gr,a);
+    gfx_a = a*.7;
+  gfx_circle(x1 + (x2-x1)* ena , y,r-ps ,1);
+  
+  mouse_cap > 0 && capold == 0 ? (
+    mouse_x > x1 -r-ps && mouse_x < x2+r+ps && mouse_y > y-r-ps && mouse_y < y+r+ps ? (
+      slider(id) = (1- slider(id));
+      willauto = id;
+      dragged = 1;
+    );
+  );
+  
+  gfx_set(gr=txta,gr,gr,starta);
+  xy(xc, y + r*2);
+  gfx_drawstr(lbl , 261,gfx_x,gfx_y);
+  this..y = gfx_y + gfx_texth*1.2;
+  
+);
+
+function moublock(x y w h id)
+  instance()(
+  
+  mouse_cap > 0 && capold == 0 && mouse_x > x && mouse_x < x+w && mouse_y > y && mouse_y < y+h ? (
+    drag = id;
+    moustrt = mouse_x;
+    slistrt = slider(id);
+  );
+  
+  drag == id ? (
+    slider(id) = max(1,min(4,  slistrt + (mouse_x-moustrt)/blow  ));
+    upsli();
+  );
+  
+);
+
+function block(lbl id master)
+  instance(x w y r order blox rr gg bb a a0 ena)(
+  
+  a0 = a = 1-.6*(1-ena);
+  
+  blox = ceil(blox0 + (order-1) * blow);
+  
+  rr = gfx_r;
+  gg = gfx_g;
+  bb = gfx_b;
+
+  r1 = .3;
+  g1 = .1;
+  b1 = .0;
+  a1 = .5;
+
+  id == 0 ? (
+    ww = ceil(blow*.1);
+    gfx_set(r1*.95,g1*.95,b1*.95,a1);
+    gfx_gradrect(blox,bloy,ww,bloh , r1*.95,g1*.95,b1*.95,a1 , 0,0,0,0 , r3/bloh,g3/bloh,b3/bloh,a3/bloh);
+  ):(
+    ww = floor(blow/3);
+  
+    w = sliw; // Slider track width
+    r = w/2;
+  //  x = gfx_x +w + master*w;
+    x = floor(blox + blow *.5 - (id!=19) * w* .3);
+    y = y0;
+    
+    r2 = .55;
+    g2 = .22;
+    b2 = .15;
+    a2 = .7;
+    r3 = .1;
+    g3 = .05;
+    b3 = .1;
+    a3 = .18;
+    
+    gfx_gradrect(blox,bloy,ww,bloh , r1,g1,b1,a1 , (r2-r1)/ww,(g2-g1)/ww,(b2-b1)/ww,(a2-a1)/ww
+    , r3/bloh,g3/bloh,b3/bloh,a3/bloh);
+//    gfx_set(r2,g2,b2,a2);
+    gfx_gradrect(blox+ww,bloy,blow-2*ww,bloh , r2,g2,b2,a2 , 0,0,0,0 , r3/bloh,g3/bloh,b3/bloh,a3/bloh);
+    gfx_gradrect(blox+blow-ww,bloy,ww,bloh , r2,g2,b2,a2 , -(r2-r1)/ww,-(g2-g1)/ww,-(b2-b1)/ww,-(a2-a1)/ww
+    , r3/bloh,g3/bloh,b3/bloh,a3/bloh);
+    
+    gfx_setfont(1);
+    
+    master == 0 ? (
+      gfx_set(gr=0,gr,gr,.4);
+      gfx_rect(xt=blox + gfx_texth*.1,bloy +gfx_texth*.15,blow-2*(xt-blox),gfx_texth*1);
+    );
+    
+    xy(ceil(blox + blow*.5),bloy);
+    gfx_set(gr=.85,gr,gr,1);
+    gfx_drawstr(lbl,257,gfx_x,gfx_y);
+    
+    bid <= 17 ? this.moublock(blox , bloy , blow, gfx_texth*1.2 ,bid += 1);
+    
+    xy(blox,y);
+    
+    id == 5 ? (
+      potsz = potsz1;
+      this.hard.switch("Hard",1,23);
+      this.maxipretre.pot("Treble",24,-1,1,maxitredb);
+      this.maxibas.pot("Bass",14,-1,1,maxibasdb);
+      this.maximix.pot("Mix",22,0,1,maximix*10);
+    ) :
+    id == 6 ? (
+      potsz = potsz2;
+      a *= (comphp1 > 0);
+      this.hipass.pot("Hi-Pass",11,0,1,comphpf);
+      a = a0;
+      this.rat.pot("Ratio",13,0,1,ratio);
+      this.rel.pot("Release",7,0,1,relms);
+      this.compmix.pot("Mix",3,0,1,compmix*10);
+    ) :
+    id == 8 ? (
+//      potsz = potsz3;
+      potsz = potsz2;
+      this.tranhsf.pot("Treble",10,-1,1,tranhsf);
+      this.tranlsf.pot("Bass",12,-1,1,tranlsf);
+      this.trandura.pot("Duration",9,0,2,tranms);
+      this.transauto.pot("AutoVol",21,0,1,transauto*10);
+    ) :
+    id == 19 ? (
+      this.maxiena.switch("Saturation",maxim.order,40);
+      this.compena.switch("Compress",comp.order,41);
+      this.transena.switch("Transient",trans.order,42);
+      this.eqena.switch("EQ",eq.order,43);
+      this.y = bloy + 4.55*swih;
+    ) :
+    id == 20 ? (
+      this.limena.switch("Limiter",1,44);
+    ) :
+    
+    id == 30 ? (
+      potsz = potsz4;
+      gfx_a = 1-.7*slider39;
+      this.eqtreg.pot("Treble",30,-1,1,eqtreg);
+      this.eqtref.pot("Freq",31,0,1,eqtref);
+
+      this.y += eq.eqtreg.r*.3;
+      
+      this.eqmidg.pot("Middle",32,-1,1,eqmidg);
+      this.eqmidf.pot("Freq",33,0,1,eqmidf);
+      this.eqmidw.pot("Width",37,.1,4,eqmidw);
+      this.y = ceil(this.y + eq.eqtreg.r*.4) ;
+      
+      this.eqbasg.pot("Bass",34,-1,1,eqbasg);
+      this.eqbasf.pot("Freq",35,0,1,eqbasf);
+      
+      gfx_set(gr = .4,gr,gr,1);
+      xt = ceil(blox + (rt = eq.eqtreg.r)*.5);
+      yt = eq.eqtref.y +rt*3;
+//      gfx_roundrect(xt,yt , floor(blow - rt *.6), ceil((eq.eqmidw.y-yt)*1.45) , rt*1.2);
+      gfx_roundrect(xt,yt , floor(blow - (xt-blox)*2 ), ceil((eq.eqmidw.y-yt)*1.45) , rt*1);
+
+    );
+  
+    id != 30 ? (
+      this.slidr(id);
+      id != 19 ? (
+        xy(floor(x + w*.8) , y);
+        this.meters(id);
+    //    id == 8 ? x += w;
+      );      
+    ):(
+      x -= floor(w*.5);
+    );
+    
+  );
+);
+
+//xy(40,50);
+// TITLE
+
+gfx_setfont(5);
+bloy = gfx_texth ;
+xy(gfx_texth*2,gfx_texth*.6);
+gfx_set(gr=1,gr,gr,1);
+gfx_drawstr("DynaStrip " , 260,gfx_x,gfx_y);
+//gfx_drawstr( sprintf(#ver,"%g", ver +.000001 )  , 260,gfx_x,gfx_y);
+gfx_drawstr( sprintf(#ver,"%.2f", ver +.000001 )  , 260,gfx_x,gfx_y);
+gfx_drawstr("  ");
+gfx_setfont(4);
+gfx_set(gr=.8,gr,gr,1);
+gfx_drawstr("by" , 260,gfx_x,gfx_y);
+gfx_setfont(3);
+gfx_drawstr(" mrelwood plugins" , 260,gfx_x,gfx_y);
+
+
+
+
+bid = 14;
+gfx_set(.9,.3,.1);
+maxim.block("Saturation",5,0);
+gfx_set(.3 ,.5,.1);
+comp.block("Compress",6,0);
+gfx_set(.0,.5,.6);
+trans.block("Transient",8,0);
+eq.block("EQ",30,0);
+
+gfx_x = blox0 + 4*blow;
+spacer.block(0,0,0);
+mix.block("Mix",19,1);
+gfx_set((gr=.4)+.6*max(0,(vol.L.g-.5)*2),gr,gr);
+peaking > 0 ? (
+  peaking == 2 ? gfx_set(1,.2,.2,1) :
+  peaking == 1 ? gfx_set(.7,.45,.0,.7);
+  (peakc += 1) > peakdur ? peaking = peakc = 0;
+);
+peaking == 0 ?  gfx_set(gr=.55,gr,gr,.5);
+
+  
+vol.block("Volume",20,1);
+
+
+mouse_cap > 0 && capold == 0 && drag > 0 ? (
+  dblc > 0 && dblc < 15 ? dblclk = drag;
+  dblc = 0;
+);
+dblc < 20 ? dblc += 1;
+
+dblclk > 0 ? (
+  ze = 0;
+//  dblclk <= 6 || dblclk == 8 || dblclk == 10 || dblclk == 12 || dblclk == 14 ? dblclk == 20 ? ze = 0 :
+  dblclk == 13 ? ze = .5 :
+  dblclk == 14 ? (
+//    slider14 == -.5 ? ze = 0 : ze = -.5;
+    ze = 0;
+  ) :
+  dblclk == 7 ? ze = .5 :
+  dblclk == 21 ? ze = 1 :
+  dblclk == 22 ? ze = .6 :
+  dblclk == 3 || dblclk == 9 || dblclk == 19 ? ze = 1 :
+  dblclk == 31 ? ze = .70715 :
+  dblclk == 33 ? ze = .266 :
+  dblclk == 35 ? ze = .3652 :
+  dblclk == 37 ? (
+    slider37 == 2 ? ze = 1 : ze = 2;
+  ) :
+  ze = 0;
+  
+  dblclk >= 15 && dblclk <= 18 ? (
+    slider15 = maxim.order = 1;
+    slider16 = comp.order = 2;
+    slider17 = trans.order = 3;
+    slider18 = eq.order = 4;
+    cur = dblclk;
+    drag = 0;
+    slider_automate(slider15);
+    slider_automate(slider16);
+    slider_automate(slider17);
+    slider_automate(slider18);
+//    upsli();
+  ):(
+  
+    slider(dblclk) = ze;
+    willauto = id;
+  );
+  dblclk = 0;
+);
+
+drag > 0 ? (
+  upsli();
+  dragged = 1;
+);
+
+drag >= 15 && drag <= 18 ? (
+  gfx_set(1,1,1,.1,1);
+  gfx_rect(tmpx = blox0 + (slider(drag)-1)*blow , bloy,blow,bloh);
+  gfx_rect(mix.blox,tmpy=y0-swih*.08+(slider(drag)-1)*swih,blow,swih);
+  gfx_set(1,1,1,.3,0);
+  gfx_rect(tmpx,bloy,blow,bloh ,0);
+  gfx_rect(mix.blox,tmpy,blow,swih ,0);
+);
+
+
+
+gfx_w != wold || gfx_h != hold ? aspect();
+
+szok <= 1 ? (
+  aspect();
+
+
+/*
+  wlim < blow*5 || trans.h < trans.y/3 ? (
+    sz1_ -= .5;
+  ) :
+  wlim > blow *6 +20 && trans.h > trans.y/2 ? (
+    sz1_ += .5;
+  ) : 
+*/
+//  wlim < blow*5 || trans.h < trans.y/3 ? (
+//  gfx_w < blow*5.2 || trans.sliy > hlim*.65 ? (
+//  gfx_w < blow*6.2 || (eq.eqbasf.y+eq.eqbasf.r*3.7) > hlim ? (
+  (gfx_w < wold || gfx_h < hold || startsz == 0 || startsz == -1) && (gfx_w < blow*6.2 || (eq.eqbasf.y+eq.r*5) > hlim) ? (
+    sz1_ = max(4, sz1_- 1);
+    startsz = -1;
+  ) :
+//  wlim > blow *6 && (wlim*(tmp=(sz1+1)/sz1))/(hlim*tmp) < aspect ? (
+//  gfx_w > blow *5.8 *(tmp=(sz1+1)/sz1) && gfx_h > trans.sliy*1.7*tmp  ? (
+  (gfx_w > wold || gfx_h > hold || startsz == 0 || startsz == 1) && (gfx_w > blow *6.6 *(tmp=(sz1+1)/sz1) && gfx_h > (eq.eqbasf.y+eq.r*6)*tmp)  ? (
+    sz1_ = min(30, sz1_ + 1);
+    startsz = 1;
+  ) :
+  szok += 1;
+  
+//  abs(sz1-sz1_) > (sz1*.1 +.5) ? sz1 = (sz1 + sz1_-sz1);
+//  abs(sz1-sz1_) > ceil(sz1*.1) ? (sz1 += sz1_-sz1);
+  abs(sz1-sz1_) >= max(1,floor(sz1*.1)) ? sz1 = ceil(sz1 + sz1_-sz1);
+  sz1 = max(5, min(30, ceil(sz1) ));
+  sz2 = ceil(sz1*.8);
+  
+  ps = max(2, ceil(sz1*.15));
+//  psl = max(1, ceil(sz1*.1));
+  psl = max(1, (vol.w*.06));
+  
+  szini();
+);
+//psl = max(1, (vol.w*.06));
+szok == 2 ? startsz = 9;
+
+mouyold = mouse_y;
+mouxold = mouse_x;
+capold = mouse_cap;
+wold = gfx_w;
+hold = gfx_h;
+wlimold = wlim;
+hlimold = hlim;
+mouse_cap == 0 ? (
+  drag = 0;
+  willauto > 0 ? (
+    slider_automate(slider(willauto));
+    willauto = 0;
+  );
+);
+
+
+
+
+
+
+
+
+
+

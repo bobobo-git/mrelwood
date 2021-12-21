@@ -1,0 +1,3147 @@
+desc:VocaStrip  [mrelwood]
+
+TODO:
+
+- Gate Thr doesn't follow automation until plugin open?
+
+
+/* VERSION HISTORY
+
+0.57
+- FIX: Unstable item positions
+
+0.56
+- Added Gate override option to De-Esser
+
+0.54
+- Fixed De-Esser Shelf & Notch modes not doing anything
+
+0.53
+- Improved De-Esser.
+- Added De-Esser Auto range
+
+0.52
+- Improved De-Esser.
+- Improved Comp Bypass when monitoring De-Ess.
+- FIX: Resolution in the De-Esser and other automation lanes.
+- ADD: Sleep mode: No CPU use when no input.
+
+
+ 
+slider1:0<0,1,0.5>-
+slider2:.288<0,1,0.01>-Attack
+slider3:.208<0,1,0.01>-Release
+slider4:0<0,1,0.01>-Comp
+slider5:0<0,1,0.01>-Tube
+ 
+slider6:20<20,1000,1>-HP Freq
+
+slider7:400<80,12000,0.5>-Notch Freq
+slider8:.48<0,1,0.01>-Notch Width
+slider9:0<-18,18,0.01>-Notch Gain
+
+slider10:1000<80,12000,0.5>-Notch2 Freq
+slider11:.48<0,1,0.01>-Notch2 Width
+slider12:0<-18,18,0.01>-Notch2 Gain
+
+slider13:200<80,1000,0.5>-LSF Freq
+slider14:.4<0,1,0.01>-LSF Width
+slider15:0<-18,18,0.01>-LSF Gain
+
+slider16:9000<2000,13000,100>-HSF Freq
+slider17:.6<0,1,0.01>-HSF Width
+slider18:0<-18,18,0.01>-HSF Gain
+
+
+slider19:.65<0,1,.01>-Stereo link
+slider20:0<-30,18,1>-Volume
+
+slider21:0<0,1,1>-Bypass RoomKill
+slider22:0<0,1,1>-Bypass Gate
+slider23:0<0,1,1>-Bypass De-Esser
+slider24:0<0,1,1>-Bypass EQ
+slider25:0<0,1,1>-Bypass Comp
+
+slider26:0<0,1,.01>-Gate LookAhead
+slider27:-60<-60,0,.1>-Gate Threshold
+slider28:.215<0,1,.01>-Gate Attack
+slider29:.525<0,1,.01>-Gate Min Open
+slider30:.316<0,1,.01>-Gate Release
+slider31:.48<0,1,.01>-Gate Range
+
+//slider31:0<0,1,.01>DownExp Thr
+slider32:-60<-60,0,.1>-Room ThrdB
+slider33:.45<0,1,.01>-Room Ratio
+
+slider34:0<0,1,{Notch,Shelf}>-De-Ess Detect
+slider35:.33<0,1,.01>-De-Ess Det Notch Width
+slider36:8000<5000,12000,100>-De-Ess Frequency
+slider37:0<-21,0,.1>-De-Ess Threshold
+//slider37:0<0,1,.01>-De-Ess Amount
+slider38:.245<0,1,.001>-De-Ess Attack
+slider39:0<0,1,.01>-De-Ess Release
+slider40:2<0,2,{Notch,Shelf,FullRange}>-De-Ess Cut
+slider41:.606<0,1,.001>-De-Ess Cut Notch Width
+slider42:.8<0,1,.01>-De-Ess Range
+slider43:0<0,1,.01>-De-Ess Monitor
+
+slider44:.33<0,1,.001>-De-Ess Det HSF Width
+slider45:.405<0,1,.001>-De-Ess Cut HSF Width
+slider46:0<0,1,.01>-Gate HPF
+slider47:1<0,1,.01>-Gate LPF
+
+slider48:1<0,1,1>-De-EssOpenGate
+
+
+
+@init
+
+pdc_bot_ch=0; pdc_top_ch=2;
+ext_noinit = 1;
+gfx_ext_retina = 1;
+
+ver = .57;
+
+pi = 3.14159265358979;
+nep = 2.71828;
+
+comp.g = 1;
+willsz = 14;
+
+mi = 0;
+ma = 65;
+//other34 = 130;
+//other40 = 135;
+nodrag = 135;
+bufL = 200;
+
+function mima(id mini maxi)(
+  mi[id] = mini;
+  ma[id] = maxi;
+);
+
+mima(1, -40,0);
+mima(6, 20,1000);
+
+mima(7, 80,12000);
+//mima(8, .1,4);
+mima(9, -18,18);
+mima(10, 80,12000);
+//mima(11, .1,4);
+mima(12, -18,18);
+mima(13, 80,12000);
+//mima(14, .1,4);
+mima(15, -18,18);
+mima(16, 2000,13000);
+//mima(17, .1,4);
+mima(18, -18,18);
+
+mima(20, -30,18);
+mima(27, -60,0); 
+mima(32, -60,0);
+//mima(33, 0,1.5);
+
+//mima(34, 0,1);
+mima(36, 5000,12000);
+mima(37, -21,0); // De-ess Thr
+mima(40, 0,2);
+//mima(42, 0,30);
+
+
+
+z = 1;
+loop(47,
+  mi[z] == ma[z] ? (
+    mi[z] = 0;
+    ma[z] = 1;
+  );
+  z += 1;
+);
+
+function hpini(freqHP)
+  instance(freqHP fHP xHP a0HP b1HP)(
+  xHP = exp(-2.0*$pi*freqHP/srate);
+  a0HP = 1.0-xHP;
+  b1HP = -xHP;
+  fHP = freqHP;
+);
+
+function hp(in)
+  instance(HP tmplHP a0HP b1HP)(
+//  (fLP != freqLP) || (fHP != freqHP) ? this.lphpini(freqLP, freqHP);
+  
+  HP = in - (tmplHP = this..a0HP*in - this..b1HP*tmplHP );
+);
+
+function eqini(lsf_n_bp_hsf_hp_lp f w dB)
+  instance(Q mode gmul omega sinf cosf alpha beta b0 b1 b2 a0 a1 a2 ab0 ab1 ab2 ab3 ab4)(
+  
+//  Q = (1.5/(w+.1));
+  mode = lsf_n_bp_hsf_hp_lp;
+  gmul = 10^(dB/40);   // Cookbook "A"
+
+  omega = 2*pi*f/srate;   // Cookbook "w0"
+  
+  sinf   = sin(omega);
+  cosf   = cos(omega);
+  
+//  alpha = sinf/(2*Q);                                   //  (if Q is specified)
+  alpha = sinf*sin( log(2)/2 * w * omega/sinf );   //(if bandwidth is specified)
+//  beta  = sqrt(gmul)/Q;                                  //(for shelving EQ filters only)       
+  beta  = sqrt(gmul)*sqrt( (gmul + 1/gmul)*(w - 1) + 2 );    // (if shelf slope is specified)
+
+  
+  
+    
+  
+  mode == 0 ? ( // LSF
+    b0 =    gmul*( (gmul+1) - (gmul-1)*cosf + beta*sinf );
+    b1 =  2*gmul*( (gmul-1) - (gmul+1)*cosf            );
+    b2 =    gmul*( (gmul+1) - (gmul-1)*cosf - beta*sinf );
+    a0 =        (gmul+1) + (gmul-1)*cosf + beta*sinf;
+    a1 =   -2*( (gmul-1) + (gmul+1)*cosf            );
+    a2 =        (gmul+1) + (gmul-1)*cosf - beta*sinf;
+  ) :
+  
+  mode == 1 ? ( // Notch
+    b0 =   1 + alpha*gmul;
+    b1 =  -2*cosf;
+    b2 =   1 - alpha*gmul;
+    a0 =   1 + alpha/gmul;
+    a1 =  -2*cosf;
+    a2 =   1 - alpha/gmul;
+  ) :
+  
+  mode == 2 ? ( // BP (Peak)
+    b0 =   alpha;
+    b1 =   0;
+    b2 =  -alpha;
+    a0 =   1 + alpha;
+    a1 =  -2*cosf;
+    a2 =   1 - alpha;
+  ) :
+
+  mode == 3 ? ( // HSF
+    b0 =    gmul*( (gmul+1) + (gmul-1)*cosf + beta*sinf );
+    b1 = -2*gmul*( (gmul-1) + (gmul+1)*cosf            );
+    b2 =    gmul*( (gmul+1) + (gmul-1)*cosf - beta*sinf );
+    a0 =        (gmul+1) - (gmul-1)*cosf + beta*sinf;
+    a1 =    2*( (gmul-1) - (gmul+1)*cosf            );
+    a2 =        (gmul+1) - (gmul-1)*cosf - beta*sinf;
+  ) :
+  
+  mode == 4 ? ( // HP (width = knee width, 1.8 = neutral)
+    b0 =  (1 + cosf)/2;
+    b1 = -(1 + cosf);
+    b2 =  (1 + cosf)/2;
+    a0 =   1 + alpha;
+    a1 =  -2*cosf;
+    a2 =   1 - alpha;
+  ) :
+  
+  mode == 5 ? ( // LP (width = knee width, 1.8 = neutral)
+    b0 =  (1 - cosf)/2;
+    b1 =   1 - cosf;
+    b2 =  (1 - cosf)/2;
+    a0 =   1 + alpha;
+    a1 =  -2*cosf;
+    a2 =   1 - alpha;
+  );  
+  
+  
+  ab0 = b0/a0;
+  ab1 = b1/a0;
+  ab2 = b2/a0;
+  ab3 = a1/a0;
+  ab4 = a2/a0;
+);
+
+function eq(in)
+  instance(in1 in2 out1 out2 out)(
+  
+  out = (this..ab0)*in + this..ab1*in1 + this..ab2*in2 - this..ab3*out1 - this..ab4*out2;
+  in2 = in1;
+  in1 = in;
+  out2 = out1;
+  out1 = out;
+  
+);
+
+
+/*
+function comp(ina)
+  instance(flt tmp tgt g trans tflt ovrflt)(
+  
+  this.ina = ina;
+  
+  ovrflt = ina-flt;
+//  ina > flt ? flt += (ovrflt) / (1+  +att1*att1 *19) :
+  ina > flt ? flt += (ovrflt) / (attd) :
+//  flt += .5-cos(1.57* (-ovrflt))*.5 * (ovrflt) * .1;
+//  flt += (ina-flt) / (1+ rel1*rel1 *99);
+  flt += (ina-flt) / (10 + rel1*rel1*39);
+
+//  trans = (ina-tflt) * tran1;
+//  flt2 += (flt1-flt2) * .1;
+  
+//  g2 = sin( min(1.57, 1.57* flt/thr ) ) / (flt/thr) + max(0, ina-flt) * tran1;
+  tgt = ( (tmp=(flt/thr)+.0001) / (1+tmp)  /(flt/thr)  );
+  
+  
+//  g = (tgt / (flt/thr) ) + trans ,jvygx7tdyf                                         * tran1;
+//  g = (tgt / (flt/thr) ) ;
+  
+  tgt < g ? (
+//    g /= (g/tgt -1) * (1-att1) +1;
+//    g -= (g-tgt) * ((1-att1*.999)^2) ; 
+//    g -= (g-tgt) / ((srate*.001)+att1*10) ; 
+    g -= (g-tgt) / (attd) ; 
+  ):(
+    g += (1-g)^2 / reld ;
+  );
+  
+//  g = (tgt / (flt/thr) ) ;
+  
+  
+//  g;
+);
+*/
+/*
+function comp(ina)
+  instance(inas inasf tgt tmp gtmp mix mixtmp g go)(
+  
+  this.ina = ina;
+  this.attd = attd;
+  this.reld = reld;
+  
+//  inas = sin(min(1.57, ina/(thr1*.25+.75) ));
+  inas = ina;
+//  inas = sin(min(1.57, ina/(thr) ));
+  inas > inasf ? inasf = inas : inasf /= 1+ (inasf) /(srate*.001);
+
+//  tgt = min(1,  (tmp = (inas)/thr) / (1+tmp) );
+  tgt = min(1,  (tmp = (inas/thr) ) / (1+tmp) ) *thr;
+//  tgt *= (.5-cos( sin( min(1.57,1.57*inasf)) *1.57)*.5)^.5 ;
+  
+//  ovrflt = inas-flt;
+
+  (inag = inas*gtmp) > tgt ? gtmp *= (tgt/inag-1) / attd +1 :
+  gtmp += (tgt-inag) / reld  ;
+//  gtmp = 1;
+
+//  g = ( (tmp=(ina/thr)+.000*1) / (1+tmp)  /(ina/thr)  );
+//  g = ( sin(1.57* min(1,ina/thr))  /(ina/thr)  );
+//  g = ( atan(ina/thr)  /(ina/thr)  );
+  
+//  g = (tmp2 = (1-flt)*(1-flt)*(1-flt)) + (1-tmp2) * g;
+  mix = (mixtmp = (inasf/thr)) /(1+mixtmp);
+
+  g = sqrt(mix) * ((gtmp*inas)/ina) + (1-mix);
+  
+  go = sin(1.57 * sin(1.57 * sin( 1.57 * (ina*g)^.5 ))) ;
+  
+//  go = (sqrt(ina*g)) / ina;
+//  g;
+/*  
+  (ina*g) > thr ? (
+    g -= (g-(ina*g)) / (attd*0+1) ; 
+  ):(
+    g += (1-g)^2 / (reld*0+1) ;
+  );
+*/
+/*
+);
+*/
+/*
+function comp_(ina) // ver 0.1
+  instance(inas inasf tgt tmp gtmp mixr mixtmp mixo mix g go)(
+  
+  inas = ina;
+  inas > inasf ? inasf = inas : inasf /= 1+ (inasf) /(srate*.001);
+
+  tgt = min(1,  (tmp = (inas/thr) ) / (1+tmp) ) *thr;
+  (inag = inas*gtmp) > tgt ? gtmp *= (tgt/inag-1) / attd +1 :
+  gtmp += (tgt-inag) / reld  ;
+  mixr = min(1, (mixtmp = (inasf/thr)) /(1+mixtmp) );
+  mixr > mixo ? mix = mixr :
+    mix /= (1 + 1/reld);
+  mixo = mix;
+  
+  g = sqrt(mix) * ((gtmp*inas)/ina) + (1-mix);
+);
+*/
+
+function comp(ina) // ver 0.2 prev
+  instance(inab tgt tgt1 tgt2 tmp inabg flt fltg g gt relbo)(
+  
+  this.attd = attd;
+  this.reld = reld;
+//  inab = ina/thr;
+  inab = ina * (1+boo);
+  
+  inab > flt ? (
+    flt += (inab-flt) / attd;
+    c = 0;
+  ):(
+    c += 1;
+    flt -= flt * ((srate*.0000000001) + (c+(1-att2)^2 *10000)/(srate*10) * (flt-inab) ) / reld;
+  );
+
+// CHARACTER
+  tube < 1 ? tgt1 = (tmp = flt*1.8) / (1+tmp) ; // Clean
+//  tgt = atan(flt *2) *.6;
+  tube > 0 ? tgt2 = (sin(min(1.57,1.57*flt*1.1))*.8); // Tube
+//  tube > 0 ? tgt2 = sin(1.57*sin(min(1.57,1.57*flt*1.1)))*.8; // Tube
+  tgt = tube * tgt2 + (1-tube) * tgt1;
+
+  g == 0 ? g = 1;
+  
+//  (inabg = inab*g) > tgt ? (
+  (fltg = flt*g) > tgt ? (
+    g /= max(0, fltg/tgt -1) / attd +1;
+    relbo = 0;
+  ):(
+//    g += (( tgt/inabg -1) *g)  / reld;
+//    g += ( (1-g)*( 1-inabg ) )  / reld   ;
+//relo = 0;
+//relbo = 1;
+//    g += relbo * ( ( 1-fltg )  / reld) ;
+    g += relbo * ( ( tgt-fltg )  / reld) ;
+//    relbo += relog + relog*relog;
+//    relbo += .00001 + relbo*relbo *(1-g);
+//    relbo += .00001 + tube*(1-g)*.001 + (1-tube)*relbo*relbo *(1-g)*(1-relbo);
+    relbo += .0001  + tube2*(1-g*g)*.000*1 + (1-tube)*relbo*relbo *(1-g)*(1-relbo)*.01;
+//    relbo += .0001 + relbo*.001;
+//    relbo = .01;
+  );
+
+  
+  g = min(1,g) ;
+//  g = 1;
+  
+   
+);
+
+
+
+function comp_n(ina) // ver 0.2 new
+  instance(inab tgt tgt1 tgt2 tmp inabg flt fltg g gt relbo)(
+  
+//  inab = ina/thr;
+  inab = ina * (1+boo);
+  
+  inab > flt ? (
+    flt += (inab-flt) / attms;
+    c = 0;
+  ):(
+    c += 1;
+    flt -= flt * ((srate*.0000000001) + (c+(1-att2)^2 *10000)/(srate*10) * (flt-inab) ) / relms;
+  );
+
+// CHARACTER
+  tube < 1 ? tgt1 = (tmp = flt*1.8) / (1+tmp) ; // Clean
+//  tgt = atan(flt *2) *.6;
+  tube > 0 ? tgt2 = (sin(min(1.57,1.57*flt*1.1))*.8); // Tube
+//  tube > 0 ? tgt2 = sin(1.57*sin(min(1.57,1.57*flt*1.1)))*.8; // Tube
+  tgt = tube * tgt2 + (1-tube) * tgt1;
+
+  g == 0 ? g = 1;
+  
+//  (inabg = inab*g) > tgt ? (
+  (fltg = flt*g) > tgt ? (
+    g /= max(0, fltg/tgt -1) / (atts) +1;
+    relbo = 0;
+  ):(
+//    g += (( tgt/inabg -1) *g)  / reld;
+//    g += ( (1-g)*( 1-inabg ) )  / reld   ;
+//relo = 0;
+//relbo = 1;
+//    g += relbo * ( ( 1-fltg )  / reld) ;
+    g += relbo * ( ( tgt-fltg )  / rels) ;
+//    relbo += relog + relog*relog;
+//    relbo += .00001 + relbo*relbo *(1-g);
+//    relbo += .00001 + tube*(1-g)*.001 + (1-tube)*relbo*relbo *(1-g)*(1-relbo);
+    relbo += .0001  + tube2*(1-g*g)*.000*1 + (1-tube)*relbo*relbo *(1-g)*(1-relbo)*.01;
+//    relbo += .0001 + relbo*.001;
+//    relbo = .01;
+  );
+
+  /*
+  tube > 0 ? (
+    gt = sin(min(1.57,1.57*(ina))) / (ina*1.5);
+  ):(
+    gt = 1;
+  );
+*/
+
+  g = min(1,g) ;
+//  g = 1;
+  
+   
+);
+
+function tube(in)
+  instance(ina g boo)(
+  
+  ina = abs(in);
+  
+  boo = tubeboo ;
+
+//  g = sin(min(1.57,ina*boo)) / (ina*boo *.45);
+  g = (ina*boo) / (1+ ina*boo) / (ina*boo*1) ;
+//  g = atan(ina*boo)/(ina*boo*.4);
+//  g /= (1+g);
+//  g = atan(g);
+
+  g *= tubevol;
+  g = min(2,g);
+
+  in * g * (1+tube*2) ;
+);
+
+function gate(ina)
+  instance(flt cm c g gdb state )(
+  
+  ina > flt ? (
+    flt = ina;
+    c = 0;
+  ):(
+    c += 1;
+    flt -= flt * ((srate*.00000000001) + (c/(srate*.1))^2 * (flt-ina) );//* (1+ ((1-flt))^3) );
+  );
+  
+  // Opening
+  flt > gathr ? (
+//  (flt + dessnogateg) > gathr ? (
+    state = 1;
+    cm = 0;
+//    gdb += garandb/gaopns;
+//    gdb += 19.93 * log10( sin(1.57*(g+garan/gaopns) ) - sin(1.57*g) );
+//    gdb += 19.93 * log10( sin(1.57*(g+garan/gaopns) ) - sin(1.57*g) );
+//    gdb += (-gdb/garandb)-(-(gdb+garandb/gaopns)/garandb);
+//    gdb += (garandb/gaopns) * ((flt/gathr -1) *4 +1);
+    gdb += (garandb/gaopns) * ((flt/gathr -1) *10 +1);
+    gdb >= 0 ? (
+      gdb = 0;
+      state = 2;
+    );
+  );
+  
+  
+  // Is Open
+  gdb >= 0 ? (cm += 1; state = 2;) ;
+
+  // Closing
+  flt < gathr && cm >= gamins && (ina < .0001 || state == 3) ? (
+    state = 3;
+    gdb -= garandb/(gacloss);
+    gdb <= -garandb ? (
+      gdb = -garandb;
+      state = 0;
+    );
+  );
+  
+//  ina > gathr && cc > 
+
+  gdb > 0 ? gdb = 0;
+  
+  g = 2^( gdb/6);
+);
+
+function downexp(ina)
+  instance(flt c g fltdb thrdb tmp)(
+  
+  ina > flt ? (
+//    flt = ina;
+    flt += (ina-flt)*.75;
+    c = 0;
+  ):(
+    c += 1;
+    flt -= flt * ((srate*.00000000001) + (tmp = c/(srate*.1))*tmp * (flt-ina) );//* (1+ ((1-flt))^3) );
+  );
+  
+  flt < downthr ? (
+/*
+    fltdb = 19.93*log10(flt);
+    thrdb = 19.93*log10(downthr);
+    g = 1/ ( (fltdb/thrdb -1) *downrat );
+*/    
+    g = 1- (tmp = 1-flt/downthr)*tmp*tmp * (downmul);
+    
+  ):(
+    g = 1;
+  );
+  
+  g < 0 ? g = 0;
+  
+  g ;
+);
+
+function lookahead()
+  instance(pos)(
+  
+  bufL[pos] = spl0;
+  bufR[pos] = spl1;
+  (pos += 1) >= buflenso ? pos = 0;
+  spl0 = bufL[pos];
+  spl1 = bufR[pos];
+);
+
+function float(in aspd rspd)
+  instance(ina flt c att rel )(
+  
+  ina = abs(in);
+  att = .01 + .9 * aspd ;
+  rel = .02 + .2 * rspd ;
+  
+  aspd == 0 && rspd == 0 ? (
+    flt += (ina-flt) * (.01 + .1*(ina>flt) );
+  
+  
+  ):(
+    
+    ina > flt ? (
+  //    flt += (ina-flt) * att*att;
+      flt += (.5-.5*cos((ina-flt)*1.57 *2) ) * att*att;
+      c = 0;
+    ):(
+      c += 1;
+  //    flt -= (flt-ina) * rel*rel * (c/ (srate/10)*rel);
+      flt -= (flt *(1- ina/flt) ) * rel*rel * min(1, c/ (srate/100)) *rel;
+    );
+  );
+  
+  flt;
+);
+
+function slirst(id1 id2)
+  instance(id)(
+
+  id = id1;
+  
+  loop(id2-id1 +1,
+    id == 2 ? zer = .288 :
+    id == 3 ? zer = .208 :
+    id == 27 || id == 32 ? zer = -60 :
+//    id == 28 ? zer = .115 :
+//    id == 29 ? zer = .4642 :
+    id == 29 ? zer = .585 :
+    id == 30 ? zer = .316 :
+  //  id == 4 || id == 5 ||id == 9 ||id == 12 ||id == 15 ||id == 18 || id == 21 ||
+  //   id == 22 || id == 29 ?  :
+    id == 19 ? zer = .65 :
+    // EQ:
+    id == 6 ? zer = 20 :
+    id == 7 ? zer = 400 :
+    id == 10 ? zer = 1000 :
+    id == 13 ? zer = 200 :
+    id == 16 ? zer = 9000 :
+    id == 8 || id == 11 ? zer = .48 :
+    id == 14 ? zer = .4 :
+    id == 17 ? zer = .6 :
+    // GATE:
+    id == 28 ? zer = .215 :
+  //  id == 29 ? zer = 10 :
+//    id == 31 ? zer = .397 :
+    id == 31 ? zer = .48 :
+    id == 33 ? zer = .45 :
+    id == 35 || id == 44 ? zer = .33 :
+    id == 36 ? zer = 8000 :
+//    id == 37 ? zer = 3 :
+    id == 38 ? zer = .245 :
+//    id == 39 ? zer = .316 :
+//    id == 41 ? zer = .4 :
+    id == 41 ? zer = .606 :
+    id == 42 ? zer = .8 :
+    id == 45 ? zer = .405 :
+    id == 47 ? zer = 1 :
+    zer = 0;
+    
+    slider(id) = zer;
+    
+    slider_automate(slider(id));
+    
+    id += 1;
+  );
+
+  zer;
+);
+
+function upgrade()
+  instance()(
+  slider1 = 0.51;
+  slider8 = (1- (slider8-.1)/2.9)^2;
+  slider11 = (1- (slider11-.1)/2.9)^2;
+  slider14 = (1- (slider14-.1)/1.4)^2;
+  slider17 = (1- (slider17-.1)/1.4)^2;
+  
+  slider19 = slider20;
+  slider20 = max(-30,slider21);
+  
+  slider21 = ceil(slider22);
+  slider22 = ceil(slider23);
+  slider23 = ceil(slider37);
+  slider33 = (slider33/1.5)^2;
+
+  slider37 = max(-21,slider35);
+  slider35 = .33;
+  slider40 = slider34;
+  
+  slirst(38,47);
+  willupsli = 1;
+  upgraded += 1;
+
+);
+
+function downgrade()
+  instance()(
+
+  slider8 = (sqrt(slider8)-1)*2.9 +.1;
+  slider11 = (sqrt(slider11)-1)*2.9 +.1;
+  slider14 = (sqrt(slider14)-1)*1.4 +.1;
+  slider17 = (sqrt(slider17)-1)*1.4 +.1;
+  
+  slider37 = slider23;
+  slider23 = slider22;
+  slider22 = slider21;
+  slider21 = slider20;
+  slider20 = slider19;
+
+  slider33 = sqrt(slider33)*1.5;
+  
+  slirst(34,45);
+
+  willupsli = 1;
+  upgraded -= 1;
+  
+);
+
+
+function desser()
+  instance(in ina inaf rawf pro thr g go c ca cmul tgt out eq raw tmp ovr)(
+  
+  ina = abs(in*.7);
+  thr = this..thr;
+
+  pro = (inaf = this.inf.float(ina,1,1)) / (rawf = this.rawf.float(raw,1,1) +.001);
+//  pro = max(pro,ina) *g;
+  ovr = max(0, (pro * g)/thr -1 ) ;
+  
+//  ovr = ovr/(1+ovr) * (dess.randb/6);
+  ovr = ovr/(1+ovr);
+
+  ovr > 0 ? (
+//    g /= (pro/thr -1) / this..atts +1;
+//    g /= this..atts +1;
+//    g -= (ca/this.atts)/this..atts ;
+    ca += 1;
+//    g -= min(2,pro/thr) * (ca/this..atts) / this..atts;
+    g /= ovr * (tmp= min(1,ca/this..atts))*tmp *.002 +1;
+    c = 0;
+  ):(
+    ca = 0;
+    c += 1;
+    cmul = (c/ this..rels);
+    g += (1-g) * .002 * cmul / (1 +2*dess.rel2);
+  );
+  g = max(0,min(1,g));
+//  g > 1 ? g = 1;
+  
+  
+  dess.cutmode == 2 ? ( //FullRange
+    tgt = dess.ran * raw;
+//    tgt = raw;
+  ):(
+    tgt = eq;
+  );
+  
+//  raw *g;
+//  go = .5-.5*cos(g*3.14);
+//  go = 1- (1-g) * (1-dess.ran);
+  go = g^(dess.randb/6);
+  dess.mon == 1 ? out = in :
+    out = (go) * raw + (1-go) * tgt;
+  out;
+  
+//  raw;
+//in;
+); //ran
+
+
+function desser2()
+  instance(in ina rawa inaf rawf pro thr g go c ca cmul tgt out eq raw tmp ovr
+  mode src)(
+  
+//  ina = abs(in*.7);
+//  ina = abs(in*.6);
+  ina = abs(in);
+  rawa = abs(raw);
+  thr = this..thr;
+
+  pro = (inaf = this.inf.float(ina,.2,1)) / (rawf = this.rawf.float(raw,.2,1) +.001);
+//  pro = (inaf = this.inf.float(ina *.5,0,0)) / (rawf = this.rawf.float(raw,0,0) +.001);
+//  pro = ina*10;
+//  pro = max(0, (inaf*1) /( rawf +.001) )^2;
+
+mode = 3;
+
+  mode == 1 ? (
+    ovr = max(0, (pro * g)/thr -1 ) ;
+    
+    ovr = ovr/(1+ovr);
+  
+    ovr > 0 ? (
+      ca += 1;
+      g /= ovr * (tmp= min(1,ca/this..atts))*tmp *.002 +1;
+      c = 0;
+    ):(
+      ca = 0;
+      c += 1;
+//      cmul = max(0, c/ this..rels -1);
+      cmul = (c/ this..rels );
+      g += (1-g) * .002 * cmul / (1 +2*dess.rel2);
+    );
+  ) :
+  
+  mode == 2 ? (
+    pro *= g;
+  
+    pro > (thr) ? (
+//      g /= (pro/(thr) -1) / ((tmp= this..atts) ) +1;
+      g /= (pro/thr -1) / (this..atts *.8 ) +1;
+//      g /= (pro/(thr) -1) *1 +1;
+  //    g /= (pro*g)/thr;
+      c = 0;
+    ):(
+/*
+      c += 1;
+      cmul = max(0, c/ this..rels -1);
+      g += (1-g) * .01 * cmul / (1 +20*dess.rel2);
+*/ 
+      g += (1-g) * .01 / (1 +20*dess.rel2);
+    );
+  ) :
+  
+  mode == 3 ? (
+    dess.ran1 == 0 ? ( // Auto Range
+//      src = min(1,(pro ) / thr -1) ;
+//      src = 1- 1/ max(1, (pro *g) / thr )  ;
+      src = max(0, 1 - min(1, thr/(pro*g) ));
+      
+      pro > thr ? (
+        ca += 1;
+//        g /= max(0,(pro*pro*g)/thr -1)  * (tmp= min(1,ca/this..atts))*tmp *.002 +1;
+//        g /= max(0,( (pro+pro*pro)*.5*g)/thr -1)  * (tmp= min(1,ca/this..atts))*tmp *.002 +1;
+//        ovr = max(0, (pro*g)/thr -1);
+        ovr = max(0, ( (pro* g^.5 + pro*g) /2 )/thr -1);
+//        ovr = max(0, ( (pro* g^.75) )/thr -1);
+
+        g /= (ovr)  * (tmp= min(1,ca/this..atts))*tmp *.002 +1;
+      ):(
+        ca = 0;
+        g += (1-g) * .01 / (1 +20*dess.rel2);
+      );
+      
+      
+    ):(
+//      pro *= pro;
+      src = g- dess.ran;
+
+// Test:      
+      ovr = max(0, ( (pro* g^.5 + pro*g) /2 )/thr -1);
+      ovr = pro/thr -1;
+      src = g- dess.ran/(pro*g);
+
+
+      pro > thr ? (
+        ca += 1;
+//        g -= src* (tmp= min(1,ca/this..atts))*tmp *.002 ;
+////        g -= g* (tmp= min(1,ca/this..atts))*tmp *.002 +1;
+        g -= (g- dess.ran/pro) *1 / (dess.atts);
+      ):(
+        ca = 0;
+        g += (1-g) * .01 / (1 +20*dess.rel2);
+      );
+    );
+  );
+  
+  g = max(0,min(1,g));
+  
+  
+  dess.cutmode == 2 ? ( //FullRange
+    dess.ran1 == 0 ? tgt = 0 : tgt = dess.ran * raw;
+//    tgt = 0;
+  ):(
+    tgt = eq;
+  );
+  
+//  go = g^(dess.randb/6);
+  go = g;
+  dess.mon == 1 ? out = in :
+    out = (go) * raw + (1-go) * tgt;
+  out;
+//  eq ; ///
+); 
+
+
+
+
+
+function upbuf()(
+  pdc_delay = buflens; 
+  
+  bufR = (bufL + buflenso +1);
+);
+
+function automate(start end)
+  instance(zr)(
+  zr = start;
+  loop(end-start +1,
+    slider_automate(slider(zr));
+    zr += 1;
+  );
+);
+
+
+function upsli()(
+
+
+// Orig:
+  attd = (att2=(att1 = slider2)^3) *(srate/50) +1;
+  attms = attd/srate *1000;
+  rel1 = slider3;
+  //reld = (srate*.00002)+ (rel1^3 * srate/10); // ver 0.1
+  reld = (srate*.0001)+ ((rel2=rel1^3) * srate/10); // ver 0.2
+  relms = reld/srate *1000;
+  //rat1 = slider4;
+  //boo = (boo1=slider4^2) *70;
+//  boo = (boo1=slider4)^2 *200;
+  boo = ( (boo1=slider4)^2 +boo1^3)/2 *200;
+  
+  
+
+/*  
+  thr = 2^((thrdb = slider1)/6);
+  thr1 = (thrdb+40)/(40);
+  attms = (att1 = slider2)^3 *(49.9)  +.1;
+  atts = ceil(attms/1000 * srate) ;
+  att2 = att1^3;
+  relms = (rel1 = slider3)^3 *(495)  +5;
+  rels = ceil(relms/1000 * srate);
+  rel2 = rel1^3;
+  //rat1 = slider4;
+  //boo = (boo1=slider4^2) *70;
+  boo = (boo1=slider4)^2 *100;
+*/
+  tube = slider5^2 ;
+  tube2 = tube^2;
+  tubemix = tube^.5;
+  tubeboo = 400*tube ;
+  //tubevol = (tmp= tubeboo*.02)/ (tmp / (1+tmp) );
+  //relog = .0001;
+  relog = 1/(1+(1-tube)^4*20000);
+  
+  hpf = slider6;
+  
+  notchf = slider7;
+  notchf1 = (notchf-mi[7]) / (ma[7]-mi[7]);
+//  notchwidth = .1 + 3.9 * (notchwid1 = slider8^2);
+//  notchwidth = slider8;
+//  notchwid1 = (notchwidth-mi[8]) / (ma[8]-mi[8]);
+  notchwid1 = slider8;
+  notchwidth = .1 + 3.9 * notchwid1^2;
+  notchQ = (1.5)/(.4+notchwidth);
+//  notchQ = (2+notchwidth/8)/(.3+notchwidth);
+//  notchQ = .5+ 8*(1-notchwid1)^2;
+  notchdB = slider9;
+  notch2f = slider10;
+  notch2f1 = (notch2f-mi[10]) / (ma[10]-mi[10]);
+  notch2wid1 = slider11;
+  notch2width = .1 + 3.9 * notch2wid1^2;
+//  notch2wid1 = (notch2width-mi[11]) / (ma[11]-mi[11]);
+  notch2Q = (1.5)/(.4+notch2width);
+  notch2dB = slider12;
+  
+  lsff = slider13;
+  lsff1 = (lsff-mi[13]) / (ma[13]-mi[13]);
+  lsfwid1 = slider14;
+  lsfwidth = .6 + 2.4 * lsfwid1^2;
+  lsfQ = (1.5)/(.4+lsfwidth);
+  lsfdB = slider15;
+  hsff = slider16;
+  hsff1 = (hsff-mi[16]) / (ma[16]-mi[16]);
+  hsfwid1 = slider17;
+  hsfwidth = .6 + 2.4 * hsfwid1^2;
+  hsfQ = (1.5)/(.4+hsfwidth);
+  hsfdB = slider18;
+  
+  link = slider19;
+  linkmix = .5 + link*.5;
+  
+  byproom = ceil(slider21);
+  bypgate = ceil(slider22);
+  bypdess = dess.byp = ceil(slider23);
+  bypeq = ceil(slider24);
+//  dess.mon = gcom.bypf = ceil(slider43);
+  dess.mon = ceil(slider43);
+//  bypcom = max(gcom.bypf,ceil(slider25) );
+  bypcom = ceil(slider25) ;
+  
+  
+  //autovol = (autmp = -thrdb/40 * 2 ) / ( autmp / (1+autmp) );
+  //autovol = max(1, (autovol/4)^3 *4 );
+  //autovol = 1 + (thr1^3.5 *10) / (1+att1^.5) *(1+rel1 *.7);
+  //autovol = max(1,autovol);
+/*  
+  booa = boo * .15;
+  autovol1 = booa/(booa/(1+booa)) / (1+3*att2^(.3+rel1*.3) + 4*(att2-att2^2)) *(1+rel1^2 *.4)
+  + 4*( boo1*(tmpv  = att2*rel1)^1)  + (tmpp = 6* 4*tmpv*(1-tmpv) );
+  //autovol = 1/(1+boo);
+
+  booa = boo * .1;
+  autovol1 = booa/(booa/(1+booa)) / (1+
+   2*att2^(.3+rel1*.3) + 4*(att2-att2^2)) *(1+rel1^2 *.4)
+   + 4*( boo1*(tmpv  = att2*rel1)^1)  + (tmpp = 6* 4*tmpv*(1-tmpv) );
+*/
+  thrms = comthr;
+  booa = booms = boo * .11;
+//  relmsm = (tmpr=relms*.01)/(1+tmpr)/tmpr;
+  autovol1 = booa/(booa/(1+booa)) 
+  * (relmsa= 1 +1*(tmprms=.2*relms)/(1+tmprms) )
+//  / (1+ .15*attms)
+//  / (attmsa = 1+ 3*(( tmpa=1.5*attms/(1+.1*relms) )/(1+tmpa) )   )
+//  / (attmsa = 1+ 3*(( tmpa=1.5*attms )/(1+tmpa) /(1+1*(relmsa-1)) )   )
+//  / (attmsa = 1+ 3*(( tmpa=1.5*attms )/(1+tmpa) /(1+relms*.01) )   )
+//  / (attmsa = 1+ 3*(( tmpa=1.5*attms )/(1+tmpa) /(1+.2*(relmsa-1)^.25) )   )
+
+//  / (attmsa = 1+ 3.5*(( tmpams=1*attms )/(1+tmpams) ) /(1 +.5*(relmsa-1)^3 )  )
+//  / (attmsa = 1+ 3.5*(( tmpams=1*attms )/(1+tmpams) )*(1/(1+ relms))  )
+//  / (attmsa = 1+ 4*(( tmpams=1.5*attms )/(1+tmpams) )/(1+ 2*(relmsa-1)^.5)  )
+//  / (attmsa = 1+ 4*(( tmpams=1.5*attms )/(1+tmpams) )/(1+ 2*(relmsa-1)^.5)  )
+  / (attmsa = 1+ 3.5*(( tmpams=1.5*attms )/(1+tmpams)  )/(1+ 2*(relmsa-1)^1) *(.3+.7*boo1^2)  )
+//  * (relmsa= 1+(tmpr=.2*relms )/(1+tmpr) * (1+.5*(attmsa-1)^.25) )
+
+//  / (attmsa = 1+ 3*((tmpa=attms)/(1+tmpa) )/(1+.001*relms)   )
+  ;
+
+  autovol *= (1-bypcom);
+  autovol1 = max(1,autovol1);
+  autovol0 = autovol1 -1;
+  
+  tubevol = (tmp=tubeboo*.4)/(tmp/(1+tmp)) /(1 + tube^1.3 *10) / (1+ autovol0*.5);
+  //tubevol = (tmp=tubeboo*.35)/atan(tmp) /(1 + tube^1.3 *10) / (1+ autovol0*.5);
+  
+  
+//  outvol = 2^( (slider21 * slider4) /6) * autovol1; // "Relative"
+  outvol = 2^( (slider20) /6) * autovol1; // Normal
+  outvol1 = (outvol-mi[20]) / (ma[20]-mi[20]);
+  
+  
+  
+  gathr = 2^((gathrdb = slider27)/6);
+  gathr1 = (slider27+60)/60;
+  gaopn1 = slider28;
+//  gaopnms = (.5 + gaopn1^3 *99.5);
+  gaopnms = (.0 + gaopn1^3 *100);
+  gaopns = gaopnms/1000*srate;
+//  gahold1 = slider27^2;
+//  gaholds = gahold1 * srate;
+  gamin1 = slider29;
+  gamins = gamin1^3 * srate;
+  gaminms = gamins/srate *1000;
+  gaclos1 = slider30;
+  gaclosms = (.5 + gaclos1^2 * 999.5);
+  gacloss = gaclosms/1000*srate;
+  garandb = (garan1 = slider31)^1.5 * 60;
+  
+  gaHPF = 20 + 980 * (gaHPF1 = slider46)^2;
+  gaLPF = 100 + 9900 * (gaLPF1 = slider47)^2;
+  
+  gaHPF != gaHPFo || dragaHPLP == 1 ? (
+    dragaHPLP = 1;
+    gaLPF = max(gaLPF,gaHPF);
+    gaHPFo = gaHPF;
+  ) :
+  gaLPF != gaLPFo || dragaHPLP == 2 ? (
+    dragaHPLP = 2;
+    gaHPF = min(gaLPF,gaHPF);
+    gaLPFo = gaLPF;
+  ) :
+  dragaHPLP = 0;
+  
+  downthr = 2^((downthrdb = slider32)/6);
+  downthr1 = (downthrdb+60)/60;
+//  downrat = 1+ slider32 * 4;
+  downmul = (downmul1 = slider33)^.5 *1.5;
+  
+  dess.detmode = slider34;
+//  dess.detmode == 0 ? dess.detid = 35 :
+//  dess.detmode == 1 ? dess.detid = 44;
+  dess.detid = 35;
+  dess.detwid1 = slider(dess.detid);
+  dess.f = slider36;
+  dess.f1 = (dess.f-mi[36]) / (ma[36]-mi[36]);
+//  dess.amt = (dess.amt1=slider37)^2;
+//  dess.thr = 2^((3-dess.amt1*30)/6);
+  dess.thr = 2^( (dess.thrdb = slider37)/6 );
+  dess.thr1 = 1-(dess.thrdb-mi[37]) / (ma[37]-mi[37]);
+  dess.attms = (dess.att1 = slider38)^2 * 50;
+  dess.atts = srate/1000 * (dess.attms) +1;
+  dess.relms = (dess.rel2 = (dess.rel1 = slider39)^2 ) * 100;
+  dess.rels = srate/1000 * (dess.relms) +1;
+  dess.cutmode = slider40;
+  dess.cutmode == 0 ? dess.cutid = 41 :
+  dess.cutmode == 1 ? dess.cutid = 45;
+  dess.cutwid1 = slider(dess.cutid);
+
+  dess.ran1 = slider42;
+  dess.randb = dess.ran1 * (35 - dess.cutmode *5 ) ;
+  dess.ran = 2^(-(dess.randb)/6);
+//  dess.ran1 = (dess.randb-mi[42]) / (ma[42]-mi[42]);
+  
+  dess.detg = 1;
+//  dessmode == 1 ? desseq.eqini(3,dess.f,dess.width,-48) :
+  dess.detmode == 1 ? ( // HP
+//    dess.detwidth = .8 + 1.2 * dess.detwid1^2;
+    dess.detwidth = 1.4 ;
+//    dess.Q = (1.5)/(.4+dess.detwidth);
+    dessdeteq.eqini(4,dess.f-1500*(dess.f1),dess.detwidth,-60);
+  ):(                   // BP
+    dess.detwidth = .1 + .9 * dess.detwid1^2;
+    dess.detg = 1.1+ 1.2*(1-dess.detwid1)^2;
+//    dess.Q = (1.5)/(.4+dess.detwidth);
+//    dessdeteq.eqini(1,dess.f,dess.detwidth,-60);
+    dessdeteq.eqini(2,dess.f,dess.detwidth,-60);
+  );
+  dess.cutmode == 0 ? (  // Notch
+    dess.cutwidth = .1 + 1.9 * dess.cutwid1^2;
+//    dess.Q = (1.5)/(.4+dess.cutwidth);
+    desscuteq.eqini(1,dess.f,dess.cutwidth,-30);
+  ) :
+  dess.cutmode == 1 ? ( // HSF
+//    dess.f *= 1.4;
+    dess.cutwidth = .8 + 1.2 * dess.cutwid1^2;
+//    dess.Q = (1.5)/(.4+dess.cutwidth);
+    desscuteq.eqini(3,dess.f*.7,dess.cutwidth,-30);
+  );
+  
+  dessnogate = slider48;
+
+  buflens = ceil( (buflen1 = slider26)^3 * (srate/10) );
+  buflenms = buflens/srate *1000;
+  drag == 0 ? upbuf();
+  
+  hp.hpini(hpf);
+//  notch.eqini(1,notchf,notchwidth,notchdB);
+  notch.eqini(1,notchf,notchwidth,notchdB);
+  notch2.eqini(1,notch2f,notch2width,notch2dB);
+  gaHPF1 > 0 ? gaHPF.eqini(4,gaHPF,1.8,0);
+  gaLPF1 < 1 ? gaLPF.eqini(5,gaLPF,1.8,0);
+  lsf.eqini(0,lsff,lsfwidth,lsfdB);
+  hsf.eqini(3,hsff,hsfwidth,hsfdB);
+  
+  automate(2,47);
+);
+
+@serialize
+
+//store_01 = file_var(0, ver);
+
+@slider
+/*
+//veress != ver || slider36 == 0 ? (
+slider36 == 0 || slider35 < 0 || slider21 < 0 || slider21 > 1 || slider19 < 0
+|| slider7 > 1 || slider11 > 1 || slider14 > 1 || slider17 > 1 || slider1 < 0 ? (
+  upgraded == 0 ? (
+    upgrade();
+  );
+//  ver = veress;
+);
+*/
+
+sleep == 0 ? upsli();
+
+
+
+@block
+
+willupsli > 0 ? (
+  upsli();
+  willupsli = 0;
+);
+
+@sample
+
+spl0 == 0 && spl1 == 0 ? (
+  (sleepc += 1) > srate*2 ? (
+    sleep = 1;
+  );
+):(
+  sleep = sleepc = 0;
+);
+
+
+sleep == 0 ? (
+
+  byproom == 0 && downthrdb > -60 ? (
+    spl0 *= downexp(max(abs(spl0),abs(spl1)));
+    spl1 *= downexp.g;
+  );
+  
+  
+  
+  bypgate == 0 && gathrdb > -60 ? (
+    gainL = spl0;
+    gainR = spl1;
+    gaHPF1 > 0 ? (
+      gainL = gaHPF.L.eq(gainL);
+      gainR = gaHPF.R.eq(gainR);
+    );
+    gaLPF1 < 1 ? (
+      gainL = gaLPF.L.eq(gainL);
+      gainR = gaLPF.R.eq(gainR);
+    );
+    gates.gate( max(abs(gainL),abs(gainR)) );
+    
+    
+    
+    
+    buflen1 > 0 ? lookahead();
+  );
+  
+  //drag == 26 ? memset(bufL,0,max(buflens,buflenso) *4 +2);
+  
+  buflens != buflenso ? willmute = 1;
+  willmute > 0 ? (
+    (mute += .1) > 1 ? (
+      mute = 1;
+      memset(bufL,0,max(buflens,buflenso) *2 +2);
+      buflenso = buflens;
+      upbuf();
+  //    memset(bufL,0,max(buflens,buflenso) *2 +2);
+  
+      willmute = 0;
+      mute = 1+ max(480, buflenso) * .06;
+    );
+  ):(
+    mute > 0 ? mute -= .01 : mute = 0;
+  );
+  
+  
+  
+  //dess.byp == 0 && dess.thrdb < 0 ? (
+  dess.byp == 0 && ( dess.thr1 > 0 || dess.mon == 1 ) ? (
+    dess.L.raw = spl0;
+    dess.R.raw = spl1;
+    dess.detmode != 3 ? ( // 
+      dess.L.in = dessdeteq.L.eq(spl0) * dess.detg;
+      dess.R.in = dessdeteq.R.eq(spl1) * dess.detg;
+    ):(                   // HSF
+      dess.L.in = spl0 - dessdeteq.L.eq(spl0);
+      dess.R.in = spl1 - dessdeteq.R.eq(spl1);
+    );
+    dess.L.eq = desscuteq.L.eq(spl0);
+    dess.R.eq = desscuteq.R.eq(spl1);
+    
+    
+    spl0 = dess.L.desser2();
+    spl1 = dess.R.desser2();
+    
+    dessnogate == 1 ? gates.g = min(1, gates.g + .5*  max(0, 1.99 - dess.L.g - dess.R.g) );
+    
+    
+    
+//    spl0 = spl1 = dess.L.eq; ///
+  
+//    spl2 = dess.L.pro;
+//    spl2 = dess.L.inaf;
+//    spl2 = min(1, ((dess.L.inaf *1.5)/(dess.L.rawf))^2 );
+//    spl3 = dess.L.rawf;
+  
+  
+  //  dess.L.gdb = dess.R.gdb = log10(min(dess.L.g,dess.L.g)) * 19.93;
+  //  spl0 = spl1 = desseq.L.eq;
+  );  
+  
+  //dess.byp == 0 ? spl0 = spl1 = desseq.L.eq(spl0);
+  //spl0 = spl1 = notch.L.eq(spl0);
+  
+  inL = spl0;
+  inR = spl1;
+  
+  bypeq == 0 ? (
+    hpf > 20 ? (
+      inL = hp.L.hp(inL);
+      inR = hp.R.hp(inR);
+    );
+    
+    lsfdB < 0 ? (
+      inL = lsf.L.eq(inL);
+      inR = lsf.R.eq(inR);
+    );
+    
+    notchdB < 0 ? (
+      inL = notch.L.eq(inL);
+      inR = notch.R.eq(inR);
+    );
+    notch2dB < 0 ? (
+      inL = notch2.L.eq(inL);
+      inR = notch2.R.eq(inR);
+    );
+    hsfdB < 0 ? (
+      inL = hsf.L.eq(inL);
+      inR = hsf.R.eq(inR);
+    );
+  );
+  
+  bypcom == 0 && dess.mon == 0 ? (
+    link == 1 ? (
+      compina = max(abs(inL),abs(inR)) ;
+      
+      Lcom.comp(compina);
+    
+      spl0 = inL * Lcom.g;
+      spl1 = inR * Lcom.g;
+      
+      reduL = reduR = log10(Lcom.g) * 19.93;
+    
+    ):(
+    
+      compina = abs(inL)*(1-linkmix) + linkmix * abs(inR);
+      compinaR = abs(inR)*(1-linkmix) + linkmix * abs(inL);
+      
+      Lcom.comp(compina);
+      Rcom.comp(compinaR);
+      
+      spl0 = inL * Lcom.g;
+      spl1 = inR * Rcom.g;
+    
+      reduL = log10( Lcom.g ) * 19.93;
+      reduR = log10( Rcom.g ) * 19.93;
+    );
+    
+    tube > 0 && (
+      spl0 = tubemix * Lcom.tube.tube(spl0) + (1-tubemix) * spl0;
+      spl1 = tubemix * Rcom.tube.tube(spl1) + (1-tubemix) * spl1;
+    );
+    
+    spl0 *= outvol ;
+    spl1 *= outvol ;
+    
+  ):(
+    spl0 = inL;
+    spl1 = inR;
+  );
+  
+  bypeq == 0 ? (
+    
+    lsfdB > 0 ? (
+      spl0 = lsf.L.eq(spl0);
+      spl1 = lsf.R.eq(spl1);
+    );
+    notchdB > 0 ? (
+      spl0 = notch.L.eq(spl0);
+      spl1 = notch.R.eq(spl1);
+    );
+    notch2dB > 0 ? (
+      spl0 = notch2.L.eq(spl0);
+      spl1 = notch2.R.eq(spl1);
+    );
+    
+    hsfdB >= 0 ? (
+      spl0 = hsf.L.eq(spl0);
+      spl1 = hsf.R.eq(spl1);
+    );
+  );
+  
+  bypgate == 0 && gathrdb > -60 ? (
+    byproom == 0 && downthrdb > -60 ? (
+      spl0 *= gates.g * downexp.g;
+      spl1 *= gates.g * downexp.g;
+    ):(
+      spl0 *= gates.g;
+      spl1 *= gates.g;
+    );
+  );
+  
+  //slider19 = redu;
+  
+  spl0 *= max(.05,1-mute);
+  spl1 *= max(.05,1-mute);
+  
+);
+
+
+
+
+
+
+
+
+
+@gfx 514 290
+
+blockid = 0;
+
+ret = max(0,gfx_ext_retina );
+
+padx = 5 *ret;
+pady = 2 *ret;
+gfx_y = padx;
+
+gfxw = max(222 , gfx_w);
+gfxh = max(164 , gfx_h);
+
+/*
+sz = geq.h = 90;
+gfx_setfont(6,"Courier",sz*.15);
+gfx_setfont(5,"Courier",sz*.17);
+gfx_setfont(4,"American Typewriter",sz*.2);
+gfx_setfont(3,"Verdana",sz*.12,'b');
+gfx_setfont(2,"Verdana",sz*.12);
+gfx_setfont(1,"Verdana",sz*.15);
+*/
+
+willsz != sz || mouse_cap > 0 || gfxw != gfxwo || gfxh != gfxho ? (
+  sz = willsz;
+//  geq.h = sz * 6.67;
+  gfx_setfont(6,"Courier",sz6 = sz);
+  gfx_setfont(5,"Courier",sz5 = sz*1.13);
+  gfx_setfont(4,"American Typewriter",sz4 = sz*1.3);
+  gfx_setfont(3,"Verdana",sz3 = sz*.8 +1,'b');
+  gfx_setfont(2,"Verdana",sz2 = sz*.8 +1);
+  gfx_setfont(1,"Verdana",sz1 = sz);
+  
+  potrQ = sz*.7;
+  dotrQ = ceil(potrQ*.15) ;
+  potrXL = sz *2.2;
+  potrL = sz *1.9;
+  potrM = sz *1.8;
+  potrSM = sz *1.45;
+  potrS = sz *1.3;
+  potrXS = sz *1.2;
+  
+  room.blockh = gate.blockh = ceil(potrL * 3);
+  dess.blockh = ceil(potrM *3);
+  geq.blockh = min(gfxw * .7, ceil(potrM *3 + gfxhxtra) );
+//  gfxhxtra = 0;
+  gcom.blockh = ceil(potrXL *3);
+  
+//  fieldx = floor(gfxw *.2);
+  fieldx = floor(padx +sz +potrQ*2 +potrXL*2 + gfxw*.02);
+  fieldw = ceil(gfxw -fieldx*2);
+  
+  mtrw1 = sz/2;
+  strack = mtrw1 *.8;
+  sliw = ceil(strack *2.5)*2 +1;
+  sliw2 = floor(sliw *.4)*2 +1;
+  slih = ceil(sliw/4) *2;
+  slih2 = ceil(slih *.7 );
+  
+  listcirr = ceil(sz2*.55) -1;
+  listcirr = ceil(dess.blockh / 12) -1;
+  
+);
+
+
+function xy(x y)
+  instance()(
+  
+  x != -99 ? gfx_x = x;
+  y != -99 ? gfx_y = y;
+);
+
+function rrectfil(xx yy ww hh rr)
+  instance(x y w h r)(
+  x = ceil(xx);
+  y = ceil(yy);
+  w = ceil(ww);
+  h = ceil(hh);
+  r = ceil(rr);
+  gfx_a = 1;
+  
+  gfx_circle(x+r,y+r,r,1,1);
+  gfx_circle(x+w-r,y+r,r,1,1);
+  gfx_circle(x+w-r,y+h-r-1,r,1,1);
+  gfx_circle(x+r,y+h-r-1,r,1,1);
+
+  gfx_rect(x+r,y,w-r*2,h,1);
+  gfx_rect(x,y+r,w+1,h-r*2,1);
+);
+
+function rrect(xx yy ww hh rr)
+  instance(x y w h r)(
+  x = floor(xx);
+  y = ceil(yy);
+  w = ceil(ww);
+  h = ceil(hh);
+  r = ceil(rr);
+  gfx_a = 1;
+  
+  gfx_arc(x+r,y+r,r , -pi/2,0);
+  gfx_arc(x+w-r,y+r,r , 0,pi/2);
+  gfx_arc(x+w-r,y+h-r-1,r , pi/2,pi);
+  gfx_arc(x+r,y+h-r-1,r , pi,pi*1.5);
+
+  gfx_line(x+r,y , x+w-r,y);
+  gfx_line(x+r,y+h-1 , x+w-r,y+h-1);
+  gfx_line(x,y+r , x,y+h-r);
+  gfx_line(x+w,y+r , x+w,y+h-r);
+);
+
+
+function block(lab x w)
+  instance(y bybuy byp bypf h byr byr2 byh2)(
+  
+  blockid += 1;
+  this.w = w;
+  this.x = x;
+  
+  gfx_setfont(1);
+  y = yy = blocky = ceil(gfx_y);
+  h = blockh = (this.blockh) ;
+
+  
+  bypf == 1 ? byp = 1 : byp = slider(20+blockid);
+  
+  gfx_set(panr=.85,pang=.75,panb=.15,1 ,0);
+//  gfx_rect(padx,yy,gfxw - padx*2 , h);
+  gfx_gradrect(x,yy,w,h , panr,pang,panb,1-byp*.5 ,
+    -.05/w,0,.05/w,-.1/w , -.25/h,-.35/h,-.35/h,.1/h);
+/*
+  // LABEL
+  gfx_set(gr=.9,gr,gr-.4,1);
+  xy(padx+padx,yy-pady);
+  gfx_drawstr( lab );
+*/
+  // LABEL BLIT
+  
+  blitw = ceil(sz * 4)*2;
+  gfx_setimgdim(2,-1,-1); gfx_setimgdim(2,5*blitw,blitw);
+  gfx_dest = 2;
+
+//  gfx_set(gr=.9,gr,gr-.4,1);
+  gfx_set(1,1,1,1);
+  xy(blockid * blitw -blitw/2,blitw/2);
+  gfx_drawstr( lab ,258,gfx_x,gfx_y);
+  
+  gfx_dest = -1;
+//  xy(gfx_texth/2 , blockh*.6);
+  gfx_set(gr=.0,gr,1,1 , 1);
+  gfx_blit(2,1,-pi/2 , (blockid-1)*blitw,0,blitw,blitw , x-blitw/2-2,ceil(blocky)-blitw/2+3,blitw,blitw);
+  
+  
+//  bybutw = floor(potrM);
+//  bybuw = floor(slih/2)*2 +1;
+//  bybuw = floor(potrQ/1.5)*2 +1;
+  bybuw = ceil(dess.blockh/10)*2 +1;
+
+  byp == 0 ? gfx_set(gr=.2,gr,gr,1) : gfx_set(gr=0,gr,gr,1);
+  rrectfil( bybux = floor(x+w-bybuw-ret), bybuy = floor(y+ret),bybuw-1,bybuw , bybuw*.2);
+  byp == 0 ? gfx_set(gr=.5,gr,gr,1) : gfx_set(1,gr=.2,.1,.5);
+  gfx_circle(floor(bybux+bybuw/2), bybuyc=floor(bybuy+bybuw/2) , byr = floor(bybuw*.4) ,1);
+  byp == 0 ? gfx_set(gr=.2,gr,gr,1) : gfx_set(gr=0,gr,gr,1);
+  gfx_circle(floor(bybux+bybuw/2), bybuyc , byr2 = min(byr-1, floor(bybuw*.32)) ,1);
+  byp == 0 ? gfx_set(gr=.5,gr,gr,bya = min(1,bybuw/30)^2 ) : gfx_set(1,gr=.2,.1,bya *.5);
+//  gfx_rect(floor(bybux+bybuw/2) -1,floor(bybuy+bybuw/2) -2 ,3,5 ,1);
+  gfx_rect(floor(bybux+bybuw/2) -1, bybuyc-(byh2=floor(byr2*.7)) ,3, byh2*2+1 ,1);
+  gfx_a /= bya;
+  gfx_rect(floor(bybux+bybuw/2) ,bybuyc-byh2 ,1,byh2*2+1 ,1);
+  
+  
+  mouse_cap > 0 && capo == 0 && mouse_x > bybux && mouse_x < bybux+bybuw
+   && mouse_y > bybuy && mouse_y < bybuy+bybuw ? (
+
+    mouse_cap > 1 ? (
+      rstmenu = blockid;
+      rstmenux2 = bybux+bybuw;
+      rstmenuy = bybuy+bybuw;
+    ):(
+      (slider(20+blockid) += 1) > 1 ? slider(20+blockid) = 0;
+      
+      upsli();
+      
+      slider_automate(slider(20+blockid));
+    );
+  );
+  
+//  gfx_y = (yy += h + pady);
+  xy(x+w, blocky + h + pady);
+);
+
+function xpos(f)
+  instance(mul)(
+  
+  mul = max(0, (log(f)-3) / 6.616 );
+  gfx_x = fieldx + fieldw * mul^1.5;
+);
+
+/*
+function slip_(x dB)
+  instance(labw)(
+  
+  _tmp = x;
+  labw = this.x2-this.x1 +2;
+  gfx_x >= this.x && gfx_x < this.x + labw ? (
+    dir < 0 ? (
+      gfx_x -= labw * 1.5;
+      dir *= .5;
+    ):(
+      gfx_x = this.x + labw ;
+      dir = 1;
+      gfx_y -= sign(notchdB) *2;
+    );
+  );
+  gfx_x < this.x && gfx_x > this.x - labw ? (
+    notnot += 1;
+    dir > 0 ? (
+      gfx_x += labw * 1.5;
+      dir *= .5;
+    ):(
+      gfx_x = this.x - labw ;
+      dir = -1;
+      gfx_y -= sign(notchdB) *2;
+    );
+  );
+  
+  abs(dir/2) < .5 ? dir = 0;
+);
+
+function flabel_(f notch dB)
+  instance(x x1 x2 labw)(
+  
+  flabely = fieldy+fieldh + pady;
+  
+  f != 0 ? (
+    xy( x = xpos(f) ,flabely);
+    
+    notch == 1 ? (
+      labhpf.slip(gfx_x,dB);
+      lablsf.slip(gfx_x,dB);
+      labhsf.slip(gfx_x,dB);
+    ) :
+    notch == 20 ? (
+      labhpf.slip(gfx_x,dB);
+      lablsf.slip(gfx_x,dB);
+      labhsf.slip(gfx_x,dB);
+      labnotch.slip(gfx_x,dB);
+    );
+    gfx_drawstr( sprintf(#dest,"%.f",f) ,257,gfx_x,gfx_y);
+    
+    x1 = x- .5*(gfx_x-x);
+    x2 = x + (x-x1);
+  );
+);  
+*/
+
+function mou(x y w h id_)
+  instance(eqf strt spd off ax)(
+  
+  help == 0 ? (
+  
+    nodrag[id] == 0 ? (
+      mouse_cap > 0 && capo == 0 ? (
+        dragg = 0;
+        mouse_x > x && mouse_x < x+w && mouse_y > y && mouse_y < y+h ? (
+          drag = id_;
+        );
+      );
+
+      drag == id_ && id_ != 0 ? (
+    
+        id = id_ + dragg *2;
+    //    eqf = 0;
+    
+        (id==6||id==7||id==10||id==13||id==16) ? (
+          dragma == 0 ? (
+            strx = mouse_x;
+            stry = mouse_y;
+            off = this..x - mouse_x;
+            ax = 0;
+            dragma = 1;
+          );
+          
+          id == 6 ? ax = 1;
+          
+          ax == 0 ? (
+            abs(mouse_x-strx) > 1 ? ax = 1 :
+              (abs(mouse_y-stry) > 1 ? ax = 2);
+          );
+          
+          ax == 1 ? slider(id) = nep^(((mouse_x+off - fieldx)/fieldw)^(1/1.5) *6.616 +3) :
+          ax == 2 ? dragg = 1;
+    
+    /*
+          id == 6 ? (mi = 20; ma = 1000; ) :
+          id == 7 || id == 10 ? (mi = 80; ma = 12000; ) :
+          id == 13 ? (mi = 80; ma = 2000; ) :
+          id == 16 ? (mi = 2000; ma = 13000;);
+          
+        ):(
+          
+          id == 8 || id == 11 ? (mi = .1; ma = 3; ) :
+          (id == 9 || id == 12 || id == 15 || id == 18) ? (mi = -18; ma = 18; ) :
+          id == 14 || id == 17 ? (mi = .1; ma = 1.5; ) :
+          id == 21 ? (mi = -30; ma = 15; ) :
+          id == 27 || id == 32 ? (mi = -60; ma = 0; ) :
+    //      id == 29 ? (mi = 0; ma = 60; ) :
+    //      id == 30 ? (mi = 0; ma = 1; ) :
+          id == 33 ? (mi = 0; ma = 1.5; ) :
+          (mi = 0; ma = 1; );
+    */
+        ):(
+          id == 20 ? spd = (ma[id]-mi[id]) *.002 : spd = (ma[id]-mi[id]) *.005;
+          
+          mouse_cap > 2 ? spd /= 10;
+          
+          mous = (mouse_x-mouxo) + (mouyo-mouse_y);
+          slider(id) += (mous) * spd;
+        );
+        
+        
+        slider(id) = max(mi[id], min(ma[id], slider(id) ));
+        
+        
+        upsli();
+      );
+    );
+  );
+);
+
+function flabel(f notch dB id)
+  instance(x x1 x2 y labw )(
+  
+  f != 0 ? (
+    gfx_x = x = xpos(f);
+    
+    notch >= 1 ? (
+//      gfx_x >= labhpf.x && gfx_x < labhpf.x + labw ? gfx_x += labhpf.labw
+//      gfx_y = y = fieldy - gfx_texth -1;
+      gfx_y = y = blocky - floor(sz*.12);
+    
+    ):(
+      gfx_y = y = fieldy+fieldh -2;
+    );
+    gfx_drawstr( sprintf(#dest,"%.f",f) ,257,gfx_x,gfx_y);
+    
+    x1 = x- .5*(gfx_x-x);
+    x2 = x + (x-x1);
+    labw = x2-x1 +2*0;
+    
+  );
+  
+  this.mou.mou(x-labw/2,y,labw,gfx_texth , id);
+);
+
+function verline(f)
+  instance(tmp nodot)(
+//  gfx_line( tmp=xpos(f),fieldy,tmp, (fieldy+fieldh-1) );
+  gfx_line( tmp=xpos(f),fieldy+potrQ/4,tmp, (fieldy+fieldh-potrQ/4) );
+);
+
+function pot(lab r val1 val id)
+  instance(x y vald val1 valms dotx doty dotcir gr)(
+  
+  x = floor(gfx_x += r);
+  y = ceil(gfx_y);
+
+  nodot = nodrag[id] = 0;
+  id == 2 || id ==3 ? (
+    val < 10 ? sprintf(#dest,"%.2f",val) :
+    val < 100 ? sprintf(#dest,"%.1f",val) :
+    sprintf(#dest,"%.f",val);
+  ) :
+  id == 27 && gathrdb == -60 ? #dest = "Off" :
+  id == 37 && dess.thrdb == 0 ? #dest = "Off" :
+  id == 35 ? (
+    dess.detmode == 1 ? (
+      #dest = "-";
+      nodot = nodrag[id] = 1;
+    ):(
+      sprintf(#dest,"%.2f",val);
+    );
+  ) :
+  id == 36 ? (
+    val < 10 ? sprintf(#dest,"%.2f",val) :
+    sprintf(#dest,"%.1f",val);
+  ) :
+
+  id == 41 || id == 45 ? (
+    dess.cutmode == 2 ? (
+      #dest = "-";
+      nodot = nodrag[id] = 1;
+    ):(
+     sprintf(#dest,"%.2f",val);
+    );
+  ) :
+  id == 42 && dess.ran1 == 0 ? #dest = "Auto" :
+  
+//  id == 45 ? sprintf(#dest,"%.2f",val) :
+
+  
+  val < 99.5 ? sprintf(#dest,"%.1f",val) :
+  sprintf(#dest,"%.f",val);
+
+  // Knob rotation
+  
+//  id == 27 ? val1 = (slider(id)+60)/60 :
+//  id == 27 ? val1 = gamin :
+//  id == 29 ? val1 = slider(id)/60 :
+//  id == 29 ? val1 = garandb/60 :
+//  val1 = (slider(id)-mi[id]) / (ma[id]-mi[id]);
+  
+  gfx_set(gr=.2,gr,gr,1);
+  gfx_circle(x,y,r,1);
+  gfx_set(potgr,potgr,potgr,1);
+  gfx_circle(x,y,r*.9-2*ret,1);
+    
+  gfx_set(1,1,1,1);
+  nodot == 0 ? (
+
+    vald = val1 *.8 + .1;
+    dotcir = floor(r*.95);
+    dotr = r*.04 +ret;
+    dotx = x -sin(6.28 * vald) * dotcir;
+    doty = y +cos(6.28 * vald) * dotcir;
+    
+    gfx_circle(dotx,doty,dotr,1);
+  );
+  
+  // Pot value
+
+  r < potrM ? gfx_setfont(2) : gfx_setfont(1);
+//  id == 25 ? gfx_drawstr( sprintf(#dest,"%.1f",buflenms),261,gfx_x,gfx_y) : 
+
+/*
+  id == 27 ? (    // Gate thr
+    gathrdb == -60 ? (gfx_a -= .3; gfx_drawstr( "Off",261,gfx_x,gfx_y) ) : 
+    gfx_drawstr( sprintf(#dest,"%.1f",slider(id)),261,gfx_x,gfx_y);
+  ) :
+  id == 31 ? gfx_drawstr( sprintf(#dest,"%.1f",garandb),261,gfx_x,gfx_y) : // Gate Range
+  id == 26 || id == 28 || id == 29 || id == 30 ? ( // Gate Ahead,Att,MinOpn,Rel
+    valms = val/srate*1000;
+    valms < 99.95 ? gfx_drawstr( sprintf(#dest,"%.1f",valms ),261,gfx_x,gfx_y) :
+      gfx_drawstr( sprintf(#dest,"%.f",valms ),261,gfx_x,gfx_y)
+  ) :
+  id == 36 ? (
+    gfx_drawstr( sprintf(#dest,"%.f", slider(id) ),261,gfx_x,gfx_y)
+  ) :
+  id == 37 ? (
+    gfx_drawstr( sprintf(#dest,"%.1f", val ),261,gfx_x,gfx_y)
+  ):(
+    val1 == 1 || val1 == 0 ? gfx_drawstr( sprintf(#dest,"%.f",slider(id)*10),261,gfx_x,gfx_y) :
+    gfx_drawstr( sprintf(#dest,"%.1f",slider(id)*10),261,gfx_x,gfx_y);
+  );
+*/
+  gfx_drawstr( #dest ,261,gfx_x,gfx_y);
+  
+  gfx_setfont(1);
+  gfx_set(gr=.1,gr,gr,1);
+  gfx_x = x;
+//  gfx_y += r;
+  gfx_y = blocky + blockh -1;
+  gfx_drawstr( lab,265,gfx_x,gfx_y);
+  gfx_x = x+r;
+  gfx_y = y;
+  
+  this.mou.mou(x-r,y-r,r*2,r*2, id);
+  
+  gfx_x = x + r;  
+  
+);
+
+function potQ(x12 lab val1 val id)
+  instance(x xo y vald val1 dotQx dotQy gr rr gg bb labw mou.ma mou.mi #dest)(
+  
+  
+  rr = gfx_r;
+  gg = gfx_g;
+  bb = gfx_b;
+  y = floor(gfx_y);
+  gfx_setfont(2);
+//  gfx_measurestr(lab,labw,0);
+  x12 < 1 ? x = floor(gfx_x + labmaxw + potrQ * 1.5):
+  x12 == 1 ? x = ceil(potQx1) :
+  x12 == 2 ? x = ceil(potQx2) :
+  x12 > 2 ? x = floor(gfx_x + potrQ);
+  xo = x;
+//  nextx = max(x +potrQ +labw,nextx);
+//  gfx_set(gr=.2,gr,gr,1);
+  gfx_set(gr=potgr/2,gr,gr,1);
+  gfx_circle(x,gfx_y,potrQ,1);
+//  gfx_set(gr=.35,gr,gr,1);
+  gfx_set(rr,gg,bb,1);
+  gfx_circle(x,gfx_y,potrQ*.7,1);
+  
+//  val1 = (val -(mou.mi))/(mou.ma-mou.mi);
+
+/*
+  id == 8 || id == 11 ? val1 = (val-.1)/2.9 :
+  id == 14 || id == 17 ? val1 = (val-.1)/1.4 :
+  id == 32 ? val1 = (val+60)/60 :
+  id == 33 ? val1 = val/1.5 :
+  val1 = slider(id);
+*/  
+  vald = val1 *.8 + .1;
+  dotQx = x -sin(6.28 * vald) * dotQcir;
+  dotQy = gfx_y +cos(6.28 * vald) * dotQcir;
+  
+  gfx_set(1,1,1,1);
+//  gfx_set(rr,gg,bb,1);
+  gfx_circle(dotQx,dotQy,dotrQ,1);
+  
+//  gfx_set(rr,gg,bb,1);
+  gfx_set(gr=.15,gr,gr,1);
+//  x12 > 2 ? gfx_y += sz*.1 : gfx_y -= 1;
+  x12 > 2 ? gfx_y += sz*.1;
+  x12 <= 1 ? (
+//    gfx_x = x = (x - potrQ -padx)/2 + padx;
+    gfx_x = x = ceil(x - potrQ -labmaxw/2 -spa/2);
+  ):(
+//    x12 == 2 ? gfx_x = x = x+ potrQ + (gfxw - x - potrQ - padx)*.5 :
+    x12 == 2 ? gfx_x = x = ceil(x + potrQ +labmaxw/2 +spa/2) :
+//      gfx_x = x = xo + potrQ*.5 + max(22,nextx/2);
+//     gfx_x = x = xo + potrQ*1.4 + max(15,labmaxw/2);
+     gfx_x = x = ceil(xo + potrQ*1.5 + labmaxw*.5);
+//    gfx_x = x = (x + potrQ +labmaxw/2 +spa/2);
+  );
+  
+  nextx = ceil(x + labmaxw/2) ;
+
+  gfx_drawstr( lab,257,gfx_x,gfx_y);
+//  gfx_drawstr( lab,261,gfx_x,gfx_y);
+    
+  gfx_y += 4;
+  gfx_set(gr=.0,gr,gr,1);
+  gfx_setfont(1);
+  
+  id == 46 ? sprintf(#dest,"%.f",val) :
+  id == 47 ? (
+    val < 9.999 ? sprintf(#dest,"%.2f",val) : sprintf(#dest,"%.1f",val);
+  ) :
+  val < 100 ? sprintf(#dest,"%.1f",val) :
+  sprintf(#dest,"%.f",val);
+
+  gfx_x = x;
+  val == -60 ? gfx_drawstr( "Off",265,gfx_x,gfx_y) :
+  gfx_drawstr( #dest,265,gfx_x,gfx_y);
+  
+  x12 <= 1 ? (
+    this.mou.mou(padx,y-potrQ,fieldx-padx,potrQ*2, id);
+  ):(
+//    this.mou.mou(fieldx+fieldw,y-potrQ,fieldx-padx,potrQ*2, id);
+    this.mou.mou(xo-potrQ*1.2,y-potrQ*1.1,potrQ*2.2+labmaxw,potrQ*2.2, id);
+  );
+  
+//  x12 == 1 || x12 == 2 ? gfx_y += (geq.h-padx*3 -potrQ*2)/2 :
+  x12 == 1 || x12 == 2 ? gfx_y += (blocky+blockh-gfx_y)*.53 :
+//    xy(xo+ potrQ + labmaxw , y +potrQ);
+    xy(nextx , y +potrQ);
+);
+
+function mtr(lbl w srcLdB srcRdB ran)
+  instance(rr gg bb x y yposL yposR tmpy)(
+  
+  lbl == "" ? mtrh = blockh- (gfx_y-blocky) -potrQ :
+    mtrh = blockh-gfx_texth*1.1 -(gfx_y-blocky);
+  
+  rr = gfx_r;
+  gg = gfx_g;
+  bb = gfx_b;
+  x = floor(gfx_x + w);
+  y = floor(gfx_y);
+  gfx_set(gr=.1,gr,gr,1);
+  
+  gfx_rect(x-w , y-1,w,mtrh+2);
+  gfx_rect(x+1 , y-1,w,mtrh+2);
+  
+  yposL = y + min(1, -srcLdB/ran) * mtrh;
+  yposR = y + min(1, -srcRdB/ran) * mtrh;
+
+//  gfx_set(.7,.4,.1,1);
+  gfx_set(rr,gg,bb,1);
+  
+  gfx_rect(x-w+1,y,w-2,yposL-y);
+  gfx_rect(x+2,y,w-2,yposR-y);
+
+  gfx_set(gr=.4,gr,gr,.5);
+  mtmp = 0;
+  tmpy = y + (6)/ran * mtrh;
+  while(tmpy < y + mtrh)(
+    gfx_line(x-w, tmpy , x,tmpy);
+    gfx_line(x+1, tmpy , x+1+w,tmpy);
+    tmpy = y + (mtmp+=6)/ran * mtrh;
+  );
+  
+//  xy(x,y+mtrh);
+  xy(x,blocky+blockh);
+  gfx_set(gr=.1,gr,gr,1);
+  gfx_drawstr( lbl , 265,gfx_x,gfx_y);
+  gfx_x = x + w;
+);
+
+
+function button(lab id)
+  instance(x1 y1 w0 h0 w h light lc)(
+  
+  
+  id == 101 ? light = dess.mon :
+  
+  light ? (
+    (lc += 1) > 30 ? light = 0;
+  ):(
+    lc = 0;
+  );
+  
+  gfx_setfont(2);
+  x1 = gfx_x;
+  y1 = gfx_y;
+  gfx_measurestr(lab,w0,h0);
+  w = w0 + padx+pady;
+  h = h0 - pady;
+
+  light ? gfx_set(.3,gr=.0,gr,1) : gfx_set(gr=.25,gr,gr,1);
+  rrectfil(x1,y1,w,h+1 , bybuw*.2);
+  gfx_set(gr=.0,gr,gr,1);
+  rrect(x1-1,y1-1,w+2,h+3 , bybuw*.25);
+  
+  xy(x1+w/2+1 , y1+h/2 -0);
+  light ? gfx_set(gr=1,gr,gr,1) : gfx_set(gr=.9,gr,gr,1);
+  
+  gfx_drawstr(lab,261,gfx_x,gfx_y);
+  gfx_setfont(1);
+  
+  mouse_cap > 0 && capo == 0 && mouse_x > x1 && mouse_x < x1+w && mouse_y > y1 && mouse_y < y1+h+1 ? (
+    id == 101 ? (
+      (slider43 += 1) > 1 ? slider43 = 0;
+      slider_automate(dess.mon = slider43);
+    ) :
+    id == 102 ? willmigrate = 1 :
+    id == 103 ? willundo = 1 :
+/*
+    id == 102 ? (
+      slirst(6,18);
+      upsli();
+    );
+*/
+    
+    light = 1;
+  );
+
+);
+
+
+
+// TITLE
+
+gfx_gradrect(padx,pady,w=gfxw-padx*2,h=room.y-pady-pady , 0,.0,.2,.5 ,
+//  0,0,0,0 , .5/h,.3/h,-.1/h,-.1/h);
+  0,0,0,0 , .2/h,.3/h,-.0/h,-.0/h);
+
+gfx_setfont(4);
+pany = floor(gfx_texth*1.1) ;
+xy(gfx_texth*3.5,gfx_texth*.6);
+gfx_set(gr=1,gr,gr,1);
+gfx_drawstr("VocaStrip " , 260,gfx_x,gfx_y);
+//gfx_drawstr( sprintf(#ver,"%g", ver +.000001 )  , 260,gfx_x,gfx_y);
+gfx_drawstr( sprintf(#ver,"%.2f", ver +.000001 )  , 260,gfx_x,gfx_y);
+gfx_drawstr("  ");
+gfx_setfont(6);
+gfx_set(gr=.8,gr,gr,1);
+gfx_drawstr("by" , 260,gfx_x,gfx_y);
+gfx_setfont(5);
+gfx_drawstr(" mrelwood plugins" , 260,gfx_x,gfx_y);
+
+
+
+
+
+
+// ROOM BLOCK
+function __1_ROOM_BLOCK__()(
+  p=0;
+);
+
+gfx_dest = -1;
+roomw = floor( (gfxw-padx*2) * .18 );
+
+
+xy(padx,pany);
+blockid = 0;
+room.block("", padx, roomw );
+
+
+//spag = (gfxw-padx*2 -potrS*10 -potrL*2 - mtrw*2) / 8;
+gfx_setfont(2);
+gfx_measurestr("Thresh",tmp1,0);
+gfx_measurestr("Close",tmp2,0);
+labmaxw = max(tmp1,tmp2);
+spa = room.spa = floor( (roomw -potrQ*2 -mtrw1*2 -labmaxw) /4 );
+potgr = .35;
+labgr = .2;
+potgy = ceil(gate.y + gate.h*.35);
+
+roomx1 = (padx + spa) -2;
+
+//xy( (tmpx = gfx_x += 5) +potrQ*.5 , blocky);
+xy( tmpx = padx + spa , blocky);
+//gfx_set(gr=.2,gr,gr,1);
+gfx_set(1,1,1,1 ,1);
+gfx_setfont(1);
+gfx_drawstr("Room Kill", 256,gfx_x,gfx_y);
+
+//nextx = gfx_x;
+xy( tmpx  , tmpy = blocky+gfx_texth*1.3 +potrQ);
+gfx_set(potgr,potgr,potgr,1 ,0);
+roothr.potQ(3, "Thresh", downthr1, downthrdb , 32);
+//xy(tmpx , tmpy + 2* potrQ + gfx_texth*.4);
+//gfx_rect(gfx_x,gfx_y,50,50);
+xy(tmpx , gfx_y + (pany-pady+blockh-gfx_y)*.5 );
+gfx_set(potgr,potgr,potgr,1);
+roorat.potQ(3, "Ratio", downmul1,downmul , 33);
+
+xy(gfx_x +mtrw1 +spa/4 , pany +padx*2 + bybuw);
+//gfx_set(1,0,0,1);
+gfx_set(1,.25,0,1);
+downthrdb == -60 ? downexp.g = 1;
+room.byp == 1 ? dowtmp = 0 : (
+  downexp.g == 0 ? dowtmp = -60 :
+    dowtmp=19.93*log10(downexp.g);
+);
+roomtr.mtr("",max(4,mtrw1/2),dowtmp,dowtmp,30);
+
+//roomx2 = ceil(gfx_x += 5);
+
+
+//rrect(roomx1,blocky+2,roomx2-roomx1,blockh-5 , potrQ*1.3);
+
+
+
+function __2_GATE_BLOCK__()(
+  p=0;
+);
+
+gatew = gfxw - roomw -padx*2 -pady;
+
+gfx_setfont(2);
+gfx_measurestr("Open",tmp1,0);
+gfx_measurestr("Close",tmp2,0);
+labmaxw = max(tmp1,tmp2);
+
+spa = gate.spa = floor( (gatew -potrS*6 -potrL*2 -potrQ*(6) -labmaxw*2 - mtrw1*2 -0) / 8 );
+
+//gate.block("Gate",70);
+gfx_y = pany;
+gate.block("Gate", gateblockx = padx+roomw+pady,floor(gfxw-padx*2-pady-roomw));
+//xy(0,padx+pady+gate.h);
+
+xy(aheadx = gateblockx +sz/2 +spa , potgy);
+gfx_set(gr=.2,gr,gr,1);
+
+//look.pot("Ahead",potrS,buflenms,25);
+look.pot("Ahead",potrS,buflen1, buflenms ,26);
+
+//gfx_rect(gfx_x,50,spag,50);
+
+// HP/LP
+gfx_setfont(3);
+xy( (tmpx = gfx_x += spa ) +potrQ*.5*0 , blocky);
+gfx_drawstr("HP/LP", 256,gfx_x,gfx_y);
+
+nextx = gfx_x;
+//gfx_measurestr("Close",labmaxw,0);
+gfx_set(potgr,potgr,potgr,1);
+//xy(tmpx = gfx_x += spag+potrQ , potgy);
+xy(tmpx , blocky + gfx_texth + (blockh - gfx_texth - potrQ*4)*.2 + potrQ);
+gaopn.potQ(3,"LPF",gaLPF1,gaLPF/1000,47);
+gfx_set(potgr,potgr,potgr,1);
+//xy(tmpx , gfx_y + (blockh-gfx_y)/2 );
+xy(tmpx , blocky + blockh - (blockh - gfx_texth -potrQ*4)*.4 -potrQ);
+gaclos.potQ(3,"HPF",gaHPF1,gaHPF,46);
+
+
+
+xy(gfx_x += spa *.8 , max(potgy, blocky+potrL +5) );
+gathr.pot("Thresh",potrL,gathr1,gathrdb,27);
+xy( floor(gfx_x += spa *.9) , pany + padx*2);
+gfx_set(.85,0,.1,1);
+gathrdb == -60 ? gates.g = 1;
+gatemtr.mtr("GR",mtrw1,gatmp=19.93*log10(gates.g)*(1-gate.byp),gatmp,30);
+/*
+gfx_set(gr=.2,gr,gr,1);
+xy(gfx_x += spag , potgy);
+gaopn.pot("Open",potrS,gaopns,27);
+gfx_x += spag;
+gaclos.pot("Close",potrS,gacloss,29);
+*/
+
+gfx_setfont(3);
+xy( (tmpx = gfx_x += spa ) +potrQ*.5*0 , blocky);
+gfx_drawstr("Duration", 256,gfx_x,gfx_y);
+
+nextx = gfx_x;
+//gfx_measurestr("Close",labmaxw,0);
+gfx_set(potgr,potgr,potgr,1);
+//xy(tmpx = gfx_x += spag+potrQ , potgy);
+xy(tmpx , blocky + gfx_texth + (blockh - gfx_texth - potrQ*4)*.2 + potrQ);
+gaopn.potQ(3,"Open",gaopn1,gaopnms,28);
+gfx_set(potgr,potgr,potgr,1);
+//xy(tmpx , gfx_y + (blockh-gfx_y)/2 );
+xy(tmpx , blocky + blockh - (blockh - gfx_texth -potrQ*4)*.4 -potrQ);
+gaclos.potQ(3,"Close",gaclos1,gaclosms,30);
+
+xy(minopnx = ceil(gfx_x += spa *.5 + potrQ), potgy);
+gamin.pot("Hold",potrS,gamin1,gaminms,29);
+
+rangex = ceil(gfx_x += spa *1.1);
+//garan.pot("Range",potrS,(slider29/60),29);
+//dess.ran1 == 0 ? garan.pot("Range",potrS,garan1,"Auto",31) :
+garan.pot("Range",potrS,garan1,garandb,31);
+
+// Units
+gfx_setfont(2);
+gfx_set(gr=.1,gr,gr,.7);
+
+xy( aheadx+potrS ,gate.uniy = ceil((blocky+blockh-sz-1 + potgy +potrS)/2) );
+gfx_drawstr("ms" , 261,gfx_x,gfx_y);
+xy( minopnx+potrS ,gate.uniy);
+gfx_drawstr("ms" , 261,gfx_x,gfx_y);
+xy( rangex+potrS ,gate.uniy);
+gfx_drawstr("dB" , 261,gfx_x,gfx_y);
+
+
+
+
+// DE-ESSER BLOCK, DESSER BLOCK
+
+function __3_DE_ESS_BLOCK__()(
+  p=0;
+);
+
+function circ(sel)
+  instance(ca cx)(
+  ca = gfx_a;
+  cx = cirx;
+  gfx_y = ceil(gfx_y + cspa);
+  
+  gfx_a = .3;
+  gfx_circle(cx,gfx_y,listcirr,1);
+  gfx_a = ca;
+  gfx_circle(cx,gfx_y,listcirr,0);
+  
+  sel ? gfx_circle(cx,gfx_y,listcirr*.6,1);
+  
+//  gfx_y += cspa;
+);
+
+function mouli(x y w n id)
+  instance(h slio)(
+
+  help == 0 ? (
+    n == 1 ? h = sz*1.4 :
+    h = (blocky+blockh-y -padx) *(n/3);
+    
+    mouse_cap > 0 && (capo == 0 || drag == id) &&
+     mouse_x > x && mouse_x < x+w && mouse_y > y && mouse_y < y+h ? (
+      drag = id;
+      slio = slider(id);
+
+      n == 1 ? (
+        (slider(id) += 1) > 1 ? slider(id) = 0;
+        drag = -1;
+      ):(
+    //    slider(id) = floor( n- (mouse_y-y)/(blockh-(y-blocky)) *3 );
+        slider(id) = floor(  (mouse_y-y)/h *n );
+        slider(id) < 0 ? slider(id) = 0;
+        slider_automate(slider(id));
+      );      
+      
+  //    slio != 2 && slider(id) != 2 && mouse_cap != capo ? (
+  /*
+      // WidthSwitch
+      mouse_cap != capo ? (
+        id == 34 ? (
+          other34[slio] = slider36;
+          slider36 = other34[slider34];
+        );
+        id == 40 ? (
+          other40[slio] = slider41;
+          slider41 = other40[slider40];
+        );
+      );
+  */
+  
+      slio != slider(id) ? upsli();
+        
+    );
+  );
+);
+
+function list(lbl li1 li2 li3 sel id)
+  instance(x x2 y r a lispa liw)(
+  
+  x = gfx_x;
+  a = gfx_a;
+  li2 != 0 ? (
+    gfx_y = y = blocky + sz*.7;
+    lispa = (blockh -(y-blocky)*2 ) /3.3;
+  ):(
+    y = gfx_y;
+    lispa = 0;
+  );
+  
+  gfx_set(gr=.1,gr,gr,1);
+  gfx_setfont(3);
+  lbl != 0 ? gfx_drawstr(lbl,260,gfx_x,gfx_y);
+  r = listcirr;
+  
+  cspa = lispa;
+  cirx = ceil(x);
+  x2 = x + r*2;
+  
+  gfx_setfont(2);
+  li1 != 0 ? (
+    circ(sel==0);
+    xy(x2, gfx_y);
+    sel == 0 ? gfx_setfont(3) : gfx_setfont(2);
+    gfx_drawstr(li1,260,gfx_x,gfx_y);
+  );
+  li2 != 0 ? (
+    circ(sel==1);
+    xy(x2, gfx_y);
+    sel == 1 ? gfx_setfont(3) : gfx_setfont(2);
+    gfx_drawstr(li2,260,gfx_x,gfx_y);
+  );
+  li3 != 0 ? (
+    circ(sel==2);
+    xy(x2, gfx_y);
+    sel == 2 ? gfx_setfont(3) : gfx_setfont(2);
+    gfx_drawstr(li3,260,gfx_x,gfx_y);
+  );
+//  gfx_measurestr(li1,liw,0);
+  liw = potrL*2;
+  li2 == 0 ? this.mouli(x-r*1.5 , y - sz*.7, liw +cr*4 ,1 , id) :
+  li3 == 0 ? this.mouli(x-r*1.5 , blocky+gfx_texth*1.4, liw +cr*4 ,2 , id) :
+   this.mouli(x-r*1.5 , blocky+gfx_texth*1.4, liw +cr*4 ,3 , id);
+  
+  gfx_x = x2 + labmaxw -1;
+);
+
+gfx_y = floor(blocky += gate.h + pady);
+
+//dess.block("De-Ess",padx, (dess.w = gfxw*.7) ,(dess.h = gate.h*.9) );
+dess.block("De-Ess",padx, (dess.w = gfxw-padx*2)  );
+//spa = floor( (dess.w -potrXL*4 -potrL*4 -potrM*2 -potrS*2 -potrXS*6 - mtrw1*2 -gfx_texth) / (10) );
+//spa = 10;
+dess.poty = floor(dess.y + dess.h*.4);
+dess.poty2 = floor(dess.y + dess.h*.45);
+
+//dessfr.button("FullRange ");
+gfx_setfont(3);
+gfx_measurestr("Band",labmaxw,0);
+
+gfx_setfont(1);
+spa = dess.spa = floor( (dess.w -labmaxw*3 -listcirr*6 -potrL*2 -potrM*2 -potrXS*6 -potrQ*3 - mtrw1*2 -sz/2) / (10) ) ;
+
+spa < 0 ? willsz -= 2 :
+spa += willspa;
+
+spa < 4 ? spa = dess.spa = 4;
+/*
+willspa < spa ? (
+//  spa -= 1;
+//  willspa = spa;
+  spa = willspa;
+);
+*/
+
+xy(tmpx = padx+gfx_texth+listcirr +spa/2 , blocky +sz/2);
+dessdetmode.list("Detect","Notch","HP",0,dess.detmode,34);
+xy(floor(tmpx -listcirr) , floor(blocky+blockh-gfx_texth*1.3) );
+dessmon.button("Monitor",101);
+
+xy(dess.detwx = tmpx +listcirr*2.5 +labmaxw +spa, dess.poty);
+dessdetw.pot("Width",potrXS,dess.detwid1,dess.detwidth,dess.detid);
+xy(dess.fx = gfx_x + spa, dess.poty -sz*.2);
+dessf.pot("Freq",potrSM,dess.f1,dess.f/1000,36);
+xy(gfx_x + spa , (dess.poty2) -gfx_texth*.25 );
+dessthr.pot("Thresh",potrM,1-dess.thr1,dess.thrdb,37);
+//dessamt.pot("De-Ess",potrM,dess.amt1,dess.amt *10,37);
+xy(floor(gfx_x + spa*1.5), dess.mtry = ceil( dess.y + gfx_texth*.5) );
+gfx_set(gr=.2,gr*2,1,1);
+//dessmtr.mtr("GR",mtrw1,log10(dess.L.g)*19.93,log10(dess.R.g)*19.93,30);
+dess.byp == 1 || dess.thr == 1 || (spl0 == 0 && spl1 == 0) ? (
+  desstmpL = desstmpR = 0;
+):(
+//  desstmpL = (1-dess.L.go)*(desstmp=(-dess.randb)*(1-dess.byp));
+//  desstmpR = (1-dess.R.go)*(desstmp=(-dess.randb)*(1-dess.byp));
+  desstmpL = 19.93 * log10(dess.L.go) ;
+  desstmpR = 19.93 * log10(dess.R.go) ;
+);
+dessmtr.mtr("GR",mtrw1,desstmpL,desstmpR,30);
+
+xy(xx = gfx_x +spa, blocky +sz *.7);
+dessnogate.list(0,"No Gate",0,0,slider48-1,48);
+
+gfx_measurestr("20.0",labmaxw,0);
+gfx_set(potgr,potgr,potgr,1);
+xy(xx, blocky + blockh *.4);
+tmpx = gfx_x;
+dessatt.potQ(3,"Att",dess.att1,dess.attms,38);
+gfx_set(potgr,potgr,potgr,1);
+//xy(tmpx , blocky + blockh - (blockh - gfx_texth -potrQ*4)*.4 -potrQ);
+xy(tmpx , blocky+blockh *.78);
+dessrel.potQ(3,"Rel",dess.rel1,dess.relms,39);
+
+gfx_setfont(3);
+gfx_measurestr("Notch",labmaxw,0);
+gfx_setfont(2);
+xy(gfx_x + sz*.5 +spa  , blocky +sz/2);
+desscutmode.list("Cut","Notch","Shelf","Full",dess.cutmode,40);
+xy(dess.cutwx = gfx_x + spa*.8, dess.poty);
+dessw.pot("Width",potrXS,dess.cutwid1,dess.cutwidth,dess.cutid);
+xy(dess.rangex = gfx_x + spa, dess.poty);
+dessran.pot("Range",potrXS,dess.ran1,dess.randb,42);
+//xy(gfx_x += spa, dess.mtry);
+
+// Units
+gfx_setfont(2);
+gfx_set(gr=.1,gr,gr,.7);
+xy( dess.detwx+potrS ,dess.uniy = floor((blocky+blockh-sz*1.3 + dess.poty2 +potrS)/2) );
+gfx_drawstr("Oct" , 261,gfx_x,gfx_y);
+xy( dess.fx+potrS ,dess.uniy );
+gfx_drawstr("KHz" , 261,gfx_x,gfx_y);
+xy( dess.cutwx+potrS ,dess.uniy);
+gfx_drawstr("Oct" , 261,gfx_x,gfx_y);
+xy( dess.rangex+potrS ,dess.uniy);
+gfx_drawstr("dB" , 261,gfx_x,gfx_y);
+
+
+
+//spa < 4 ? willspa -= 1;
+(spa < potrS * .45)
+//|| ((_sz = gfxw - padx*2 -gfx_x) < -1)
+|| (gcom.y + gcom.blockh -gfxhxtra > gfxh*1.0)
+? willspa -= 1;
+//spa > 10 || (gfxw - padx*2 -gfx_x) > potrS ? willsz += 1;
+//spa > 17 ? willsz += 1;
+
+(spa > potrS*1) && (spa > 8) && (gcom.y + gcom.blockh -gfxhxtra < gfxh*.9*(1-1/(sz))) ? (
+  willsz += 1;
+  willspa = 0;
+);
+
+//willspa  < potrS*.1 ? willspa = 3;
+willspa < -1 ? (
+  willsz -= 1;
+  willspa = 0;
+);
+
+willsz < 5 ? (
+  willsz = 5;
+  willspa -= 1;
+);
+
+
+
+
+
+
+
+gfx_y = blocky + dess.h + pady;
+
+// EQ BLOCK
+function __4_EQ_BLOCK__()(
+  p=0;
+);
+
+gfx_setfont(1);
+
+geq.block("EQ",padx,geq.w=gfxw-padx*2 );
+
+//fieldy = geq.y + gfx_texth -1;
+fieldy = geq.y + sz+2;
+fieldh = geq.blockh - (sz+2)*2;
+//fieldh = min(fieldw, geq.blockh - (sz+2)*2 );
+//fieldr = ceil((fieldw+fieldh)*.02);
+//fieldr = ceil((fieldh)*.1);
+fieldr = potrQ;
+
+gfx_set(gr=.1,gr,gr,1);
+rrectfil(fieldx,fieldy,fieldw,fieldh,fieldr);
+//gfx_set(panr,pang,panb,1);
+gfx_set(gr = .2,gr,gr,1);
+gfx_line(fieldx,fieldz=ceil(fieldy+fieldh*.5),fieldx+fieldw,fieldz);
+verline(30);
+verline(40);
+verline(50);
+verline(200);
+verline(300);
+verline(400);
+verline(500);
+verline(2000);
+verline(3000);
+verline(4000);
+verline(5000);
+verline(11000);
+verline(12000);
+verline(13000);
+verline(14000);
+
+gfx_set(gr = .35,gr,gr,1);
+verline(100);
+verline(1000);
+verline(10000);
+
+//gfx_set(.4,gr=.1,gr,1);
+gfx_set(gr=.0,gr,gr,1);
+labhpf.flabel(hpf,0,0,6);
+gfx_set(.15,gr=.0,gr,1);
+lablsf.flabel(lsff,0,0,13);
+gfx_set(gr=.15,gr+.05,0,1);
+labhsf.flabel(hsff,0,0,16);
+gfx_set(gr=.0,gr,.6,1);
+labnotch.flabel(notchf,1,notchdB,7);
+gfx_set(gr=.0,.15,gr,1);
+labnotch2.flabel(notch2f,2,notchdB2,10);
+
+//xy(fieldx+fieldw + potrQ/2 , fieldy+fieldh);
+//xy(padx*2 , fieldy+fieldh-1);
+//eqrst.button("Reset EQ",102);
+/*
+eqrst.go > 0 ? (
+  slirst(6,18);
+  eqrst.go = 0;
+  upsli();
+);
+*/
+
+
+
+
+
+// GRAPH
+gfx_set(0,1,1,1);
+
+xf = fieldx;
+tmpc = 0;
+loop(fieldw,
+  
+  dBf = 0;
+
+  hpf > 20 ? (
+//    (tmp = max(0,labhpf.x - xf)) > (hpq = fieldw/20) ? dBf -= tmp/2 :
+//      dBf -= (max(0,labhpf.x + hpq*2 - xf) / (hpq*3) )^3 * (hpq/2) ;
+
+//    xf < (tmpx = xpos(hpf*3)) ? dbf -= ( (tmpx-xf)/fieldh )^3 *2;
+//    xf < (tmp1 = xpos(hpf*3)) ? dbf -= (tmp2 = ((tmp1-xf)/(tmp1-labhpf.x) )^1) *(tmp1-xf)*.04;
+//    xf < (tmp1 = xpos(hpf*2)) ? dbf -= (tmp2 = (tmp1-xf))/(tmp1-labhpf.x) * tmp2 *.04;
+    xf < (tmp1 = xpos(hpf*3)) ? dbf -= (tmp2 = (tmp1-xf)/((tmp1-labhpf.x)*1.5)) *(1-1/(tmp2^3+1)) *15;
+  );
+
+
+//  tmpQ = lsfQ/(1+lsfQ) *.5 + .1;
+/*
+  tmpQ = (lsfQ*.66)^2 *.5 + .1;
+  xf < (tmp1 = lablsf.x - abs(lsfdB)/tmpQ) ? dBf += (lsfdB) :
+  xf < (tmp2 = lablsf.x + abs(lsfdB)/tmpQ) ? dBf += lsfdB * (.5+cos(3.14* (xf-tmp1)/(tmp2-tmp1) )*.5);
+*/
+  xf < (tmp1 = xpos(lsff/(.5+lsfwidth*2)) ) ? dBf += (lsfdB) :
+  xf < (tmp2 = xpos(lsff*(.5+lsfwidth*2)) ) ? dBf += lsfdB * (.5+cos(3.14* (xf-tmp1)/(tmp2-tmp1) )*.5);
+  
+  
+//  xf > labhsf.x ? dBf += (hsfdB);
+  
+//  tmpQ = (notchQ*.5)^2  + .1;
+  tmpw = (notchwidth*.25)  + .00;
+//  (nwtmp = abs(xf - labnotch.x)) < (nhtmp = abs(notchdB) / tmpQ) ? (
+  (nwtmp = abs(xf - labnotch.x)) < (nhtmp = labnotch.x*(1+tmpw) -labnotch.x) ? (
+    dBf += (1- nwtmp/nhtmp)^3 * notchdB;
+  );
+
+//  tmpQ = (notch2Q*.5)^2  + .1;
+  tmpw = (notch2width*.25)  + .00;
+//  (nwtmp = abs(xf - labnotch2.x)) < (nhtmp = abs(notch2dB) / tmpQ) ? (
+  (nwtmp = abs(xf - labnotch2.x)) < (nhtmp = labnotch2.x*(1+tmpw) -labnotch2.x) ? (
+    dBf += (1- nwtmp/nhtmp)^3 * notch2dB;
+  );
+
+/*
+  tmpQ = (hsfQ*.66)^2 *.5 + .1;
+  xf > (tmp2 = labhsf.x + abs(hsfdB)/tmpQ) ? dBf += (hsfdB) :
+  xf > (tmp1 = labhsf.x - abs(hsfdB)/tmpQ) ? dBf += hsfdB * (.5-cos(3.14* (xf-tmp1)/(tmp2-tmp1) )*.5);
+*/
+  xf > (tmp2 = xpos(hsff*(.5+hsfwidth*2)) ) ? dBf += (hsfdB) :
+  xf > (tmp1 = xpos(hsff/(.5+hsfwidth*2)) ) ? dBf += hsfdB * (.5-cos(3.14* (xf-tmp1)/(tmp2-tmp1) )*.5);
+
+  
+//  yf = fieldz - dBf/24 * fieldh;
+  yf = fieldz - abs(dBf/36)^.8 * sign(dBf) * fieldh ;
+
+  xf > fieldx && yfo > fieldy && yfo < fieldy + fieldh ? gfx_line(xfo,yfo ,xf,yf);
+  xfo = xf;
+  yfo = yf;
+  xf += 1;
+);
+
+
+function fieldB(f dB id)
+  instance(x r g b)(
+  
+  r = gfx_r;
+  g = gfx_g;
+  b = gfx_b;
+  
+  gfx_x = this.x;
+  gfx_y = fieldz - abs(dB/36)^.8 * sign(dB) * fieldh;
+  gfx_y = max(fieldy +dBh *.4 , min(fieldy+fieldh-dBh *.4 , gfx_y) );
+  
+  dB != 0 ? (
+    gfx_measurestr( sprintf(#dest,"%.1f",dB) , dBw,dBh);
+    dBw *= 1.1;
+    dBh *= 1.1;
+    
+    gfx_set(0,0,0,.5);
+    gfx_rect(gfx_x-dBw/2 +1,gfx_y-dBh*.3,dBw,dBh*.7);
+    gfx_set(gr = .4,gr,gr,1);
+    gfx_rect(gfx_x-dBw/2 +1,gfx_y-dBh*.3,dBw,dBh*.7 ,0);
+    gfx_set(r,g,b,1);
+    gfx_drawstr( #dest , 261,gfx_x,gfx_y);
+  );
+  
+  this.mou.mou(this.x-dBw/2,gfx_y-dBh*.3,dBw,dBh*.7 , id)
+
+);
+
+//gfx_set(1,gr=.8,gr,1);
+gfx_set(.95,gr=.7,gr,1);
+lablsf.fieldB(lsff,lsfdB,15);
+//gfx_set(gr=1,gr,gr,1);
+gfx_set(gr=.8,gr,1,gr,1);
+labnotch.fieldB(notchf,notchdB,9);
+gfx_set(gr=.5,.9,gr-.1,gr,1);
+labnotch2.fieldB(notch2f,notch2dB,12);
+gfx_set(gr=.9,gr,.3,1);
+labhsf.fieldB(hsff,hsfdB,18);
+
+gfx_setfont(2);
+gfx_measurestr("Notch W",labmaxw,0);
+geq.spa = spa = (geq.w -fieldw -sz*1 -potrQ*4 -labmaxw*2) /6;
+
+potQx1 = ceil(fieldx - potrQ -spa);
+potQx2 = ceil(fieldx + fieldw + potrQ +spa);
+dotQcir = floor(potrQ - dotrQ*1.5);
+
+
+//gfx_y = geq.poty2 = fieldy + potrQ*.5 +pady*0 + gfxhxtra *.3;
+//gfx_y = geq.poty2 = fieldy + potrQ*.5 +pady*0 + fieldh *.3;
+gfx_y = geq.poty2 = ceil(geq.y + geq.h *.3);
+//gfx_set(gr=.15,gr,.9,1);
+gfx_set(gr=.32,gr+.03,.4,1);
+labnotch.potQ(1,"Notch W", notchwid1,notchwidth , 8);
+//gfx_set(gr=.2,gr,gr,1);
+//gfx_set(.4,gr=.32,gr,1);
+gfx_set(.45,.3,.15,1);
+lablsf.potQ(1,"LSF W", lsfwid1,lsfwidth , 14);
+gfx_y = geq.poty2;
+gfx_set(gr=.3,.4,gr-.1,1);
+labnotch2.potQ(2,"Notch W",notch2wid1,notch2width , 11);
+gfx_set(gr=.45,gr,.1,1);
+labhsf.potQ(2,"HSF W",hsfwid1,hsfwidth , 17);
+
+
+gfx_y = blocky + blockh + pady; 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// COMPRESSOR BLOCK, COMP BLOCK
+
+function __5_COMP_BLOCK__()(
+  p=0;
+);
+
+
+
+
+function slide(lab val id)
+  instance(x y gr sliyran ypos val1)(
+
+  x = floor(gfx_x + sliw/2);
+  y = floor(gfx_y) ;
+  gfx_set(gr=.05,gr,gr,1);
+//  gfx_rect(x-strack/2 , gfx_y,strack,sliyran = gcom.blockh-2*(gfx_y-gcom.y) );
+  gfx_rect(x-strack/2 , gfx_y,strack,sliyran = gcom.blockh-gfx_texth -sz );
+  x -= 2;
+
+  id == 20 ? val1 = (slider(id)+30)/45 :
+    val1 = slider(id);
+  ypos = floor( gfx_y + slih/2 + (sliyran-slih) * (1-val1) -0 );
+  gfx_set(gr=.2,gr,gr,1);
+  rrectfil(floor(x-sliw/2), ypos-slih/2,sliw,slih , floor(slih/4) );
+  gfx_set(gr=.35,gr,gr,1);
+  rrectfil(floor(x-sliw2/2), ypos-slih2/2,sliw2,slih2 , (slih2*.32));
+  
+  xy(x,ypos);
+  gfx_set(1,1,1,1);
+  gfx_setfont(2);
+  val == 10 ? gfx_drawstr( sprintf(#dest,"%.f",val) ,261,gfx_x,gfx_y ) :
+    gfx_drawstr( sprintf(#dest,"%.1f",val) ,261,gfx_x,gfx_y );
+  
+//  xy(x,y+sliyran);
+  xy(x, blocky + blockh -1 );
+  gfx_set(gr=.1,gr,gr,1);
+  gfx_setfont(1);
+  gfx_drawstr( lab,265,gfx_x,gfx_y);
+  
+  this.mou.mou(x-sliw/2,y,sliw,sliyran,id);
+  
+  xy(x+sliw/2 , y);
+);
+
+  
+
+gcom.block("Comp",padx,gfxw-padx*2);
+
+dess.mon == 1 ? (
+  bypfa = .5+.5* sin(bypfac+=.06);
+  gfx_set(0,0,0, .5+.1* bypfa);
+  gfx_rect(padx,blocky,gfxw-padx*2 +1,blockh +1);
+);
+
+spa = gcom.spa = floor( (gfxw - padx*2 -sliw*3 -potrXL*2 - potrM*4 - mtrw1*2) / 8);
+
+sliy = floor(gcom.y+gcom.blockh*.12);
+
+//xy(spa/2 + sliw, gcom.y + potrM);
+xy(padx +spa, sliy);
+link.slide("St Link",slider19*10,19);
+gfx_x += spa;
+tube.slide("Tube",slider5*10,5);
+
+//xy(gfxw*.45 , gcom.y + gcom.blockh*.45);
+xy(gfx_x + spa , gcom.y + gcom.blockh*.45);
+com.pot("Compress",potrXL,boo1,boo1*10,4);
+xy(gfx_x + spa , sliy);
+//gfx_set(.7,.4,.1,1);
+gfx_set(0,.6,.3,1);
+redu.mtr("GR",mtrw1+2,reduL*(1-dess.mon),reduR*(1-dess.mon),30);
+//xy(gfx_x + spa , gcom.y+gcom.blockh*.45);
+xy(gfx_x + spa , gcom.poty2 = floor(gcom.y+ potrM*1.4) );
+att.pot("Attack",potrM,att1,attms,2);
+gfx_x += spa ;
+rel.pot("Release",potrM,rel1,relms,3);
+
+xy(gfx_x +spa, sliy);
+vol.slide("Volume",slider20,20);
+
+gfx_setfont(2);
+gfx_set(gr=.1,gr,gr,.7);
+
+//xy( att.x ,blocky+blockh-gfx_texth*1.5);
+xy( att.x , gcom.uniy = floor((blocky+blockh-sz-1 + gcom.poty2 +potrM)/2) );
+gfx_drawstr("ms" , 261,gfx_x,gfx_y);
+xy( rel.x , gcom.uniy);
+gfx_drawstr("ms" , 261,gfx_x,gfx_y);
+
+
+
+gfxhxtra += gfxh - (gcom.y + gcom.h + padx);
+gfxhxtra = max(0, min(gfxh,gfxhxtra) );
+
+
+
+
+rstmenu > 0 ? (
+
+  gfx_setfont(1);
+  #rst = "Reset block";
+  gfx_measurestr( #rst,rstw,rsth );
+  rsth *= 1.5;
+  rstw += potrQ*2;
+
+  mouse_x > rstmenux1 && mouse_x < rstmenux2 && mouse_y > rstmenuy
+  && mouse_y < rstmenuy+rsth ? rstmouse = 1 : rstmouse = 0;
+  
+  rstmouse ? gfx_set(gr=.8,gr,gr,1) : gfx_set(gr=.7,gr,gr,1);
+  gfx_rect(rstmenux1 = rstmenux2-rstw,rstmenuy , rstw,rsth);
+  gfx_set(gr=.0,gr,gr,1);
+  gfx_rect(rstmenux1 = rstmenux2-rstw,rstmenuy , rstw,rsth ,0);
+  rstmouse ? gfx_set(gr=.0,gr,gr,1) : gfx_set(gr=.2,gr,gr,1);
+  xy(rstmenux1+(rstmenux2-rstmenux1)*.5 , rstmenuy+rsth*.5 );
+  gfx_drawstr(#rst,261,gfx_x,gfx_y);
+
+  rstmature == 2 && ((mouse_cap == 0 && capo > 0) || (mouse_cap > 0 && capo == 0)) ? (
+    rstmouse == 1 ? (
+    
+      slider(20+rstmenu) = 0;
+  
+      rstmenu == 1 ? slirst(32,33);
+      rstmenu == 2 ? slirst(26,31);
+      rstmenu == 3 ? slirst(34,45);
+      rstmenu == 4 ? slirst(6,18);
+      rstmenu == 5 ? (
+        slirst(2,5);
+        slirst(19,20);
+      );
+  
+      slider_automate(slider(rstmenu));
+    );
+    rstmenu = rstmature = rstmouse = rstc = 0;
+  ):(
+    rstc == 0 ? (
+      rstmx = mouse_x;
+      rstmy = mouse_y;
+    );
+
+    rstmx != mouse_x || rstmy != mouse_y || mouse_cap != capo ? rstmature = 1;
+    (rstc += 1) > 15 && rstmature == 1 ? rstmature = 2;
+  );
+);
+
+
+
+
+
+
+
+// DOUBLECLICKS, DBLCLICKS
+function __DOUBLECLICKS__()(
+  p=0;
+);
+
+
+drag > 0 && capo == 0 ? dbls += 1;
+dbls > 0 ? (
+  (dblc += 1) > 15 ? dbls = dblc = 0;
+  dbls >= 2 ? dbl = dragp;
+);
+
+dbl > 0 ? (
+
+  dbl != 34 && dbl != 40 ? (
+  
+    slirst(dbl,dbl);
+  
+    upsli();
+  );  
+  dbl = dbls = dblc = drag = 0;
+);
+
+
+
+
+
+
+
+
+
+
+
+// HELP
+
+function dim()
+  instance(x y w h focus)(
+  
+  focus = 0;
+  mouse_x > x && mouse_x < x+w && mouse_y > y && mouse_y < y + h ? (
+    focus = 1;
+  );
+  
+  gfx_set(0,0,0,helpa *(1-focus) );
+  gfx_rect(x,y,w+1,h);
+);
+
+xy(gfxw,0);
+gfx_setfont(4);
+gfx_set(1,1,1,1);
+gfx_drawstr("??? ",258,gfx_x,gfx_y);
+hlpbx = gfx_x - (gfx_x-gfxw) *2;
+
+mouse_cap > 0 && capo == 0 && mouse_x > hlpbx && mouse_x < gfxw
+&& mouse_y > 0 && mouse_y < gate.y ? (
+  (help += 1) > 1 ? help = -1;
+);
+
+help != 0 ? (
+  help == 1 ? (
+    (helpa += .05) > .9 ? ( helpa = .9; help = 2; );
+  );
+  
+  room.dim();
+  gate.dim();
+  dess.dim();
+  geq.dim();
+  gcom.dim();
+  
+  
+  help == 2 ? (
+    gfx_set(gr=.9,gr,gr,1);
+    gfx_setfont(1);
+    hx1 = sz *2;
+    hx2 = sz *(8 + 2*geq.focus);
+    room.focus == 1 ? (
+      xy(hx1,dess.y);
+      gfx_drawstr("ROOM KILL, a downward expander for decreasing room ambience.
+      
+Increase threshold to activate.
+Fine tune the steepness with the Ratio adjustment.
+Gain Reduction metering up to -30dB.");
+
+    ) :
+    gate.focus == 1 ? (
+      xy(hx1,dess.y);
+      gfx_drawstr("GATE");
+      xy(hx1,gfx_y +sz*2);
+      gfx_drawstr("AHEAD");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Lookahead time (ms). Increases (latency compensated) plugin latency.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("HP/LP");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Hi-Pass and Lo-Pass filter (frequency) for gate input detection.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("THRESH");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Gate Threshold level (dB).");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("GR");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Gain Reduction metering, up to -30dB.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("OPEN");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Gate open duration (ms).");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("CLOSE");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Gate close duration (ms).");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("HOLD");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Minimum duration (ms) for the gate to remain open.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("RANGE");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- How much (dB) the sounds are diminished to when the gate is closed.");
+
+    ) :
+    
+    dess.focus == 1 ? (
+      xy(hx1,room.y);
+      gfx_drawstr("DE-ESS");
+      xy(hx1,gfx_y +sz*2);
+      gfx_drawstr("DETECT");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- De-Esser detector mode (Notch/Hi-Pass).");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("WIDTH");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Detector notch width (Octaves).");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("FREQ");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Detector center frequency (Notch) / corner frequency (Hi-Pass).");
+
+      xy(hx1,geq.y);
+      gfx_drawstr("THRESH");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Detector signal louder than the Threshold (relative to the
+rest of the signal) will be processed.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("GR");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Gain Reduction metering, up to -30dB.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("ATT");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- De-Esser attack duration (ms).");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("REL");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- De-Esser release duration (ms).");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("CUT");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- De-Esser cut mode (Notch/Hi-Shelf/Fullrange).");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("WIDTH");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Notch or Hi-Shelf width (Octaves). Remembers the width of
+the unselected cut mode.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("RANGE");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Maximum cut amount (dB).");
+    ) :
+
+    geq.focus == 1 ? (
+      xy(hx1,room.y);
+      gfx_drawstr("EQ");
+      xy(hx1,gfx_y +sz*2);
+      gfx_drawstr("WIDTH KNOBS");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Adjust the width of each EQ node (except Hi-Pass).");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("FREQUENCY");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- The frequency of each node is shown above (Notch x2) or
+below (Hi-Pass, Shelves) the EQ graph.");
+      xy(hx2,gfx_y+gfx_texth);
+      gfx_drawstr("- Drag each frequency label left/right to set the frequency, and
+up/down to set the gain (except Hi-Pass).");
+      xy(hx2,gfx_y+gfx_texth);
+      gfx_drawstr("- Once the frequency node is active, you can drag the node directly.");
+    ) :
+    
+    gcom.focus == 1 ? (
+      xy(hx1,room.y);
+      gfx_drawstr("COMP");
+      xy(hx1,gfx_y +sz*2);
+      gfx_drawstr("ST LINK");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Linking of Left and Right gain reductions. For example:
+    Natural drums: Try a high value to retain stereo image.
+    Vocal group: Try a low value to compress left and right channel separately.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("TUBE");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Tube tone and dynamics emulator. Adds a lot of overdrive past 3.0.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("COMPRESS");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- The amount of pre-compressor boost.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("GR");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Gain Reduction metering, up to -30dB.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("ATTACK");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Compressor attack duration (ms).");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("RELEASE");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Compressor release duration (ms).");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("VOLUME");
+      xy(hx2,gfx_y);
+      gfx_drawstr("- Adjusts the Compressor output volume.");
+
+
+    ) : (
+      xy(gfxw*.5,gfxh*.3);
+      gfx_drawstr("GENERAL",261,gfx_x,gfx_y);
+      xy(gfxw*.5,gfx_y +gfx_texth *1.5);
+      gfx_drawstr("Hover mouse over any FX block for help.",261,gfx_x,gfx_y);
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("- Each block has a Bypass button at the top right corner.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("- Right-click the Bypass button for the option to reset the block to defaults.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("- Double-click any adjustment to set it to a default value.");
+      xy(hx1,gfx_y +gfx_texth);
+      gfx_drawstr("- Hold Cmd/Alt/Ctrl while dragging for precise adjustments.");
+      
+      gfx_measurestr("Migrate",migw,migh);
+      gfx_measurestr("Migrate",unw,unh);
+      xy(gfxw-migw*2-unw-padx,6);
+      mig.button("Migrate",102);
+      xy(gfxw-migw-unw,6);
+      undo.button("Undo",103);
+      willmigrate == 1 ? (
+        willmigrate = 0;
+        upgrade();
+        help = -1;
+      );
+      willundo == 1 ? (
+        willundo = 0;
+        downgrade();
+        help = -1;
+      );
+      
+    );
+  );
+  
+  help == -1 ? (
+    (helpa -= .05) < 0 ? ( helpa = help = 0; );
+  );
+
+);
+
+
+
+
+
+
+drago = drag;
+drag > 0 ? dragp = drag;
+
+mouse_cap == 0 ? (
+
+  capo > 0 && notch2f < notchf ? (
+/*
+      tmpf = notchf;
+      tmpq = notchQ;
+      tmpg = notchdB;
+      notchf = notch2f;
+      notchQ = notch2Q;
+      notchdB = notch2dB;
+      notch2f = tmpf;
+      notch2Q = tmpQ;
+      notch2dB = tmpdB;
+*/
+      tmpf = slider7;
+      tmpq = slider8;
+      tmpg = slider9;
+      slider7 = slider10;
+      slider8 = slider11;
+      slider9 = slider12;
+      slider10 = tmpf;
+      slider11 = tmpQ;
+      slider12 = tmpg;
+
+      upsli();
+    );
+
+  drag > 0 ? (
+    slider_automate(slider(drag));
+  );
+  drag = dragma = dragg = 0;
+);
+
+capo = mouse_cap;
+mouxo = mouse_x;
+mouyo = mouse_y;
+gfxwo = gfxw;
+
+
+/*
+gfx_dest = 2;
+xy(50,50);
+gfx_set(1,1,1,1);
+//gfx_drawstr("TestiBlit",261,gfx_x,gfx_y);
+gfx_dest = -1;
+xy(0,floor(blocky+blockh));
+//gfx_blit(2,1,0);
+//gfx_blit(2,1,-pi/2 , 0,0,100,100 , gfx_x,gfx_y,100,100);
+//gfx_blit(2,1,-pi/2 , 0,0,100,100 , padx+ceil(gfx_texth/2)-48,ceil(blocky+blockh*.6)+50,100,100);
+
+//xy(120,50+floor(blocky+blockh));
+
+//gfx_drawstr("TestiBlitless",261,gfx_x,gfx_y);
+*/
+
+
+
+
